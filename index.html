@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>StockRoom Scanner</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap');
+
+:root {
+  --bg: #0d1117;
+  --surface: #161b27;
+  --surface2: #1e2535;
+  --border: #2a3148;
+  --accent: #00e5a0;
+  --accent-glow: rgba(0,229,160,0.15);
+  --accent-dim: #0a3d2a;
+  --accent2: #4d8bff;
+  --warn: #ffb547;
+  --danger: #ff5263;
+  --text: #dde3f5;
+  --text-muted: #5a6488;
+  --radius: 16px;
+  --radius-sm: 10px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: 'Syne', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-x: hidden;
+}
+
+/* ─── HEADER ─── */
+.hdr {
+  width: 100%; max-width: 520px;
+  padding: 14px 18px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 90;
+  background: rgba(13,17,23,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.hdr-logo { font-size: 1rem; font-weight: 800; letter-spacing: -0.5px; }
+.hdr-logo em { color: var(--accent); font-style: normal; }
+.hdr-right { display: flex; align-items: center; gap: 8px; }
+.hdr-session { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--text-muted); text-align: right; line-height: 1.55; }
+.hdr-session b { color: var(--accent2); font-weight: 500; }
+.icon-btn {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 7px 9px;
+  color: var(--text-muted); cursor: pointer; font-size: 0.95rem;
+  transition: all .15s;
+}
+.icon-btn:hover { color: var(--text); border-color: var(--accent); }
+
+/* ─── SCREENS ─── */
+.screen { display: none; width: 100%; max-width: 520px; padding: 22px 18px 40px; flex-direction: column; gap: 18px; animation: up .28s ease; }
+.screen.active { display: flex; }
+@keyframes up { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+
+/* ─── TYPE ─── */
+.eyebrow { font-size: 0.65rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+h1 { font-size: 2rem; font-weight: 800; line-height: 1.1; }
+h2 { font-size: 1.25rem; font-weight: 700; }
+
+/* ─── TECH GRID ─── */
+.tech-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tech-card {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--radius); padding: 18px 12px 14px;
+  cursor: pointer; text-align: center;
+  transition: all .18s ease;
+  display: flex; flex-direction: column; align-items: center; gap: 9px;
+}
+.tech-card:hover, .tech-card:active {
+  border-color: var(--accent); background: var(--accent-glow);
+  transform: translateY(-2px);
+}
+.avatar {
+  width: 42px; height: 42px; border-radius: 50%;
+  background: var(--accent-dim); color: var(--accent);
+  font-size: 1rem; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.tech-name { font-weight: 700; font-size: 0.9rem; }
+
+/* ─── BUTTONS ─── */
+.btn {
+  border: none; border-radius: var(--radius-sm);
+  padding: 15px 18px; width: 100%;
+  font-family: 'Syne', sans-serif; font-size: 0.95rem; font-weight: 700;
+  cursor: pointer; transition: all .18s;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+.btn-primary { background: var(--accent); color: #041a0f; }
+.btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.btn-primary:disabled { background: var(--accent-dim); color: #1a4535; cursor: not-allowed; transform: none; filter: none; }
+.btn-ghost { background: var(--surface2); color: var(--text); border: 1.5px solid var(--border); }
+.btn-ghost:hover { border-color: var(--accent2); color: var(--accent2); }
+.btn-danger { background: rgba(255,82,99,.1); color: var(--danger); border: 1.5px solid rgba(255,82,99,.25); }
+.btn-danger:hover { background: rgba(255,82,99,.18); }
+.btn-warn { background: rgba(255,181,71,.1); color: var(--warn); border: 1.5px solid rgba(255,181,71,.25); }
+.row2 { display: flex; gap: 10px; }
+.row2 .btn { flex: 1; }
+
+/* ─── SCAN BOX ─── */
+.scan-wrap { position: relative; border-radius: var(--radius); overflow: hidden; background: #000; aspect-ratio: 4/3; border: 2px solid var(--border); }
+.scan-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scan-ui { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.scan-frame {
+  width: 58%; aspect-ratio: 1;
+  border: 2px solid var(--accent); border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.5);
+  position: relative;
+}
+.scan-beam {
+  position: absolute; left: 6px; right: 6px; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  top: 8%; animation: beam 2.2s ease-in-out infinite;
+}
+@keyframes beam { 0%,100% { top:8%; opacity:.7; } 50% { top:88%; opacity:1; } }
+.scan-frame::before,.scan-frame::after,.sf-bot::before,.sf-bot::after {
+  content:''; position:absolute; width:14px; height:14px; border-color:var(--accent); border-style:solid;
+}
+.scan-frame::before { top:-2px; left:-2px; border-width:3px 0 0 3px; border-radius:5px 0 0 0; }
+.scan-frame::after  { top:-2px; right:-2px; border-width:3px 3px 0 0; border-radius:0 5px 0 0; }
+.sf-bot::before { bottom:-2px; left:-2px; border-width:0 0 3px 3px; border-radius:0 0 0 5px; }
+.sf-bot::after  { bottom:-2px; right:-2px; border-width:0 3px 3px 0; border-radius:0 0 5px 0; }
+.scan-hint { position:absolute; bottom:10px; left:0; right:0; text-align:center; font-family:'DM Mono',monospace; font-size:0.7rem; color:rgba(255,255,255,.5); }
+
+.scan-status { font-family:'DM Mono',monospace; font-size:0.78rem; text-align:center; padding:6px 0; color:var(--text-muted); }
+.scan-status.ok { color:var(--accent); }
+.scan-status.err { color:var(--danger); }
+
+/* ─── TABS ─── */
+.tabs { display:flex; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:4px; gap:4px; }
+.tab { flex:1; padding:9px; border:none; border-radius:7px; background:transparent; color:var(--text-muted); font-family:'Syne',sans-serif; font-size:0.85rem; font-weight:700; cursor:pointer; transition:all .15s; }
+.tab.active { background:var(--surface); color:var(--accent); border:1px solid var(--border); }
+
+/* ─── ITEM PICKER LIST ─── */
+.item-search { width:100%; }
+.items-scroll { display:flex; flex-direction:column; gap:6px; max-height:320px; overflow-y:auto; padding-right:2px; }
+.item-pick-row {
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--surface2); border:1.5px solid var(--border);
+  border-radius:var(--radius-sm); padding:11px 14px;
+  cursor:pointer; transition:all .15s;
+}
+.item-pick-row:hover { border-color:var(--accent); }
+.item-pick-row.selected { border-color:var(--accent); background:var(--accent-glow); }
+.item-pick-name { font-weight:600; font-size:0.9rem; }
+.item-pick-bc { font-family:'DM Mono',monospace; font-size:0.68rem; color:var(--text-muted); margin-top:2px; }
+.pick-check { width:22px; height:22px; border-radius:50%; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:0.75rem; flex-shrink:0; transition:all .15s; }
+.item-pick-row.selected .pick-check { background:var(--accent); border-color:var(--accent); color:#041a0f; }
+
+/* ─── DETECTED / QTY CARD ─── */
+.detected-card {
+  background:var(--accent-glow); border:1.5px solid var(--accent);
+  border-radius:var(--radius); padding:16px;
+  display:flex; flex-direction:column; gap:12px;
+}
+.det-name { font-size:1.05rem; font-weight:700; color:var(--accent); }
+.det-bc { font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted); }
+.qty-row { display:flex; align-items:center; gap:14px; }
+.qty-btn {
+  width:38px; height:38px; border-radius:50%;
+  border:1.5px solid var(--border); background:var(--surface2);
+  color:var(--text); font-size:1.3rem; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .15s; flex-shrink:0;
+}
+.qty-btn:hover { border-color:var(--accent); color:var(--accent); }
+.qty-num { font-size:2rem; font-weight:800; min-width:36px; text-align:center; }
+.qty-label { font-size:0.78rem; color:var(--text-muted); }
+
+/* ─── INPUT ─── */
+input[type=text], input[type=number] {
+  background:var(--surface2); border:1.5px solid var(--border);
+  border-radius:var(--radius-sm); padding:12px 14px;
+  font-family:'DM Mono',monospace; font-size:0.9rem; color:var(--text);
+  width:100%; transition:border-color .15s;
+}
+input:focus { outline:none; border-color:var(--accent2); }
+.input-row { display:flex; gap:8px; }
+.input-row input { flex:1; }
+.input-row .btn { width:auto; padding:12px 16px; flex-shrink:0; }
+
+/* ─── CART / SUMMARY ─── */
+.cart-list { display:flex; flex-direction:column; gap:8px; }
+.cart-item {
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--radius-sm); padding:11px 14px; gap:10px;
+}
+.ci-info { flex:1; min-width:0; }
+.ci-name { font-weight:600; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ci-bc { font-family:'DM Mono',monospace; font-size:0.68rem; color:var(--text-muted); }
+.ci-qty {
+  font-family:'DM Mono',monospace; font-weight:700; font-size:1rem;
+  color:var(--accent); background:var(--accent-dim);
+  padding:4px 12px; border-radius:20px; flex-shrink:0;
+}
+.ci-del { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1rem; padding:4px; transition:color .15s; flex-shrink:0; }
+.ci-del:hover { color:var(--danger); }
+
+.cart-total {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:12px 2px; border-top:1px solid var(--border);
+  font-size:0.82rem; color:var(--text-muted);
+}
+.cart-total strong { color:var(--text); font-size:1rem; }
+
+/* ─── LOG ─── */
+.log-list { display:flex; flex-direction:column; gap:10px; }
+.log-entry {
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--radius); padding:14px 16px;
+  display:flex; flex-direction:column; gap:8px;
+}
+.log-hdr { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+.log-tech { font-weight:700; font-size:0.95rem; }
+.log-time { font-family:'DM Mono',monospace; font-size:0.68rem; color:var(--text-muted); text-align:right; flex-shrink:0; }
+.log-items-text { font-size:0.8rem; color:var(--text-muted); line-height:1.65; }
+.log-badge { font-family:'DM Mono',monospace; font-size:0.68rem; background:var(--accent-dim); color:var(--accent); padding:3px 9px; border-radius:20px; white-space:nowrap; }
+
+.empty { text-align:center; padding:48px 20px; color:var(--text-muted); }
+.empty-icon { font-size:2.2rem; margin-bottom:10px; }
+
+/* ─── SETUP PANEL ─── */
+.setup-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:18px;
+  display:flex; flex-direction:column; gap:14px;
+}
+.setup-status { font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted); }
+.setup-status.ok { color:var(--accent); }
+.tech-manage-list { display:flex; flex-direction:column; gap:6px; }
+.tech-manage-row {
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:8px; padding:9px 12px;
+}
+.tech-manage-name { font-weight:600; font-size:0.88rem; }
+
+/* ─── STEP DOTS ─── */
+.steps { display:flex; gap:5px; align-items:center; }
+.step-dot { width:7px; height:7px; border-radius:50%; background:var(--border); transition:all .2s; }
+.step-dot.on { background:var(--accent); width:20px; border-radius:3px; }
+.step-dot.done { background:var(--accent-dim); }
+
+/* ─── OVERLAY ─── */
+.overlay {
+  position:fixed; inset:0; background:rgba(13,17,23,.88);
+  display:none; align-items:center; justify-content:center;
+  flex-direction:column; gap:16px; z-index:200;
+}
+.overlay.show { display:flex; }
+.spinner { width:44px; height:44px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .75s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ─── TOAST ─── */
+.toast {
+  position:fixed; bottom:22px; left:50%;
+  transform:translateX(-50%) translateY(60px);
+  background:var(--surface); border:1px solid var(--accent);
+  color:var(--accent); padding:11px 22px; border-radius:40px;
+  font-weight:700; font-size:0.88rem; z-index:300;
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1);
+  white-space:nowrap; box-shadow:0 8px 32px rgba(0,0,0,.5);
+  pointer-events:none;
+}
+.toast.show { transform:translateX(-50%) translateY(0); }
+.toast.err { border-color:var(--danger); color:var(--danger); }
+.toast.warn { border-color:var(--warn); color:var(--warn); }
+
+/* scrollbar */
+::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-track { background:transparent; } ::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-logo"><em>Stock</em>Room</div>
+  <div class="hdr-right">
+    <div class="hdr-session" id="hdrSession" style="display:none">
+      <b id="hdrTech">—</b><br><span id="hdrCount">0 items</span>
+    </div>
+    <button class="icon-btn" onclick="goLog()" title="Log">📋</button>
+    <button class="icon-btn" onclick="goSetup()" title="Settings">⚙️</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: HOME — pick tech
+══════════════════════════════════════ -->
+<div class="screen active" id="s-home">
+  <div>
+    <div class="eyebrow">Storage Room</div>
+    <h1>Who's checking<br>out stock?</h1>
+  </div>
+  <div>
+    <div class="eyebrow" style="margin-bottom:10px">Select your name</div>
+    <div class="tech-grid" id="techGrid"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: SCAN / PICK ITEM
+══════════════════════════════════════ -->
+<div class="screen" id="s-scan">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <div class="eyebrow">Session</div>
+      <h2 id="scanTechLabel">—</h2>
+    </div>
+    <div class="steps" id="stepDots"></div>
+  </div>
+
+  <!-- Mode tabs -->
+  <div class="tabs">
+    <button class="tab active" id="tabScan" onclick="setMode('scan')">📷 Scan Barcode</button>
+    <button class="tab" id="tabPick" onclick="setMode('pick')">📋 Pick from List</button>
+  </div>
+
+  <!-- SCAN MODE -->
+  <div id="modeScan">
+    <div class="scan-wrap">
+      <video id="scanVideo" autoplay playsinline muted></video>
+      <div class="scan-ui">
+        <div class="scan-frame">
+          <div class="scan-beam"></div>
+          <div class="sf-bot"></div>
+        </div>
+      </div>
+      <div class="scan-hint">Align barcode within the box</div>
+    </div>
+    <div class="scan-status" id="scanStatus">🔍 Searching for barcode…</div>
+    <div class="eyebrow" style="margin:10px 0 6px">Or type barcode / name manually</div>
+    <div class="input-row">
+      <input type="text" id="manualInput" placeholder="Barcode or item name…" onkeydown="if(event.key==='Enter')doManual()">
+      <button class="btn btn-ghost" style="width:auto;padding:12px 16px" onclick="doManual()">Go</button>
+    </div>
+  </div>
+
+  <!-- PICK MODE -->
+  <div id="modePick" style="display:none">
+    <input type="text" class="item-search" id="pickSearch" placeholder="🔍  Search items…" oninput="renderPickList()" style="margin-bottom:10px">
+    <div class="items-scroll" id="pickList"></div>
+  </div>
+
+  <!-- DETECTED / SELECTED ITEM -->
+  <div id="detectedWrap" style="display:none">
+    <div class="eyebrow" style="margin-bottom:8px">Item ready — set quantity</div>
+    <div class="detected-card">
+      <div>
+        <div class="det-name" id="detName">—</div>
+        <div class="det-bc" id="detBc">—</div>
+      </div>
+      <div class="qty-row">
+        <button class="qty-btn" onclick="adjQty(-1)">−</button>
+        <div class="qty-num" id="qtyNum">1</div>
+        <button class="qty-btn" onclick="adjQty(1)">+</button>
+        <div class="qty-label">units</div>
+      </div>
+    </div>
+    <div class="row2" style="margin-top:12px">
+      <button class="btn btn-ghost" onclick="addAndNext()">＋ Next Item</button>
+      <button class="btn btn-primary" onclick="addAndFinish()">✓ Finish</button>
+    </div>
+  </div>
+
+  <!-- Cart preview (collapsible) -->
+  <div id="cartPreview" style="display:none">
+    <div class="eyebrow" style="margin-bottom:8px">In cart (<span id="cartCount">0</span>)</div>
+    <div class="cart-list" id="miniCart"></div>
+  </div>
+
+  <button class="btn btn-danger" onclick="cancelSession()">✕ Cancel Session</button>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: SUMMARY
+══════════════════════════════════════ -->
+<div class="screen" id="s-summary">
+  <div>
+    <div class="eyebrow">Review before submitting</div>
+    <h2 id="sumTech">—</h2>
+  </div>
+  <div class="setup-card">
+    <div class="eyebrow">Items checked out</div>
+    <div class="cart-list" id="summaryList"></div>
+    <div class="cart-total">
+      <span>Total line items</span>
+      <strong id="sumTotal">0</strong>
+    </div>
+  </div>
+  <div class="row2">
+    <button class="btn btn-ghost" onclick="showScreen('s-scan')">← Edit</button>
+    <button class="btn btn-primary" id="submitBtn" onclick="submitSession()">Submit to Sheet ✓</button>
+  </div>
+  <button class="btn btn-danger" onclick="cancelSession()">✕ Cancel Session</button>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: LOG
+══════════════════════════════════════ -->
+<div class="screen" id="s-log">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <div class="eyebrow">History</div>
+      <h2>Checkout Log</h2>
+    </div>
+    <button class="btn btn-ghost" style="width:auto;padding:9px 14px;font-size:0.82rem" onclick="showScreen('s-home')">← Home</button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" id="tabAll" onclick="filterLog('all')">All</button>
+    <button class="tab" id="tabToday" onclick="filterLog('today')">Today</button>
+  </div>
+  <div class="log-list" id="logList"></div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: SETUP
+══════════════════════════════════════ -->
+<div class="screen" id="s-setup">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <div class="eyebrow">Configuration</div>
+      <h2>⚙️ Setup</h2>
+    </div>
+    <button class="btn btn-ghost" style="width:auto;padding:9px 14px;font-size:0.82rem" onclick="showScreen('s-home')">← Home</button>
+  </div>
+
+  <!-- Webhook -->
+  <div class="setup-card">
+    <div class="eyebrow">Google Sheets Webhook</div>
+    <input type="text" id="webhookInput" placeholder="https://script.google.com/macros/s/…/exec" oninput="saveWebhook()">
+    <div class="setup-status" id="webhookStatus">⚪ No webhook set — data saves locally only</div>
+    <div style="font-size:0.75rem;color:var(--text-muted);line-height:1.65">
+      Paste your Apps Script Web App URL here. See the included <strong style="color:var(--text)">Apps Script</strong> file for setup instructions.
+    </div>
+  </div>
+
+  <!-- Barcode map -->
+  <div class="setup-card">
+    <div class="eyebrow">Barcode → Item Mapping</div>
+    <div style="font-size:0.78rem;color:var(--text-muted);line-height:1.6;margin-bottom:8px">
+      Map scanned barcodes to your inventory items. If a barcode isn't mapped the app will ask you to select the item manually.
+    </div>
+    <div class="tech-manage-list" id="barcodeMapList"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+      <input type="text" id="newBc" placeholder="Barcode…" style="flex:1;min-width:100px">
+      <select id="newBcItem" style="flex:2;min-width:130px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 10px;color:var(--text);font-family:'Syne',sans-serif;font-size:0.82rem"></select>
+      <button class="btn btn-ghost" style="width:auto;padding:12px 14px" onclick="addBarcodeMap()">Add</button>
+    </div>
+  </div>
+
+  <!-- Techs -->
+  <div class="setup-card">
+    <div class="eyebrow">Technicians</div>
+    <div class="tech-manage-list" id="techManageList"></div>
+    <div class="input-row" style="margin-top:6px">
+      <input type="text" id="newTechInput" placeholder="Add name…" maxlength="30" onkeydown="if(event.key==='Enter')addTech()">
+      <button class="btn btn-ghost" style="width:auto;padding:12px 14px" onclick="addTech()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Overlay -->
+<div class="overlay" id="overlay">
+  <div class="spinner"></div>
+  <div style="color:var(--text-muted);font-size:0.88rem">Sending to Google Sheets…</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ZXing barcode library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.21.3/zxing.min.js"></script>
+<script>
+// ════════════════════════════════════════════════════════
+// INVENTORY — exact column names from your Google Sheet
+// ════════════════════════════════════════════════════════
+const INVENTORY = [
+  "Lactated Ringers","Tubing","22G ViaValve","20G Viavalve",
+  "Vial adapter","Curos Caps","5ml Syringe","20G Needle",
+  "Zofran","Toradol","Pepcid","Benadryl","Phenergan","Dex",
+  "Coban","B-Complex","B-12","Zinc","Magnesium","Vitamin C",
+  "Glutathione","Tri-immune","NAD+",
+];
+
+// ════════════════════════════════════════════════════════
+// PERSISTENT STATE
+// ════════════════════════════════════════════════════════
+let techs      = JSON.parse(ls('sr_techs') || JSON.stringify(["Alex","Jordan","Morgan","Taylor","Casey"]));
+let localLog   = JSON.parse(ls('sr_log')   || '[]');
+let barcodeMap = JSON.parse(ls('sr_barcodes') || '{}'); // { barcode: itemName }
+let webhook    = ls('sr_webhook') || '';
+
+function ls(k,v){ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v); }
+function save(){ ls('sr_techs',JSON.stringify(techs)); ls('sr_log',JSON.stringify(localLog)); ls('sr_barcodes',JSON.stringify(barcodeMap)); }
+
+// ════════════════════════════════════════════════════════
+// SESSION
+// ════════════════════════════════════════════════════════
+let session = { tech:'', items:[] }; // items: [{name,barcode,qty}]
+let currentItem = null;  // {name,barcode}
+let currentQty  = 1;
+let scanMode = 'scan';   // 'scan' | 'pick'
+let codeReader = null;
+let camStream  = null;
+
+// ════════════════════════════════════════════════════════
+// SCREEN ROUTING
+// ════════════════════════════════════════════════════════
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(id !== 's-scan') stopCam();
+  if(id === 's-scan') { startCam(); renderMiniCart(); updateSteps(); }
+  if(id === 's-summary') renderSummary();
+  if(id === 's-log') renderLog('all');
+  if(id === 's-home') renderTechGrid();
+  if(id === 's-setup') renderSetup();
+  updateHdr();
+}
+function goLog(){ showScreen('s-log'); }
+function goSetup(){ showScreen('s-setup'); }
+
+// ════════════════════════════════════════════════════════
+// HOME
+// ════════════════════════════════════════════════════════
+function renderTechGrid(){
+  const g = document.getElementById('techGrid');
+  g.innerHTML = '';
+  techs.forEach(n=>{
+    const init = n.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const d = document.createElement('button');
+    d.className = 'tech-card';
+    d.innerHTML = `<div class="avatar">${init}</div><div class="tech-name">${n}</div>`;
+    d.onclick = ()=>startSession(n);
+    g.appendChild(d);
+  });
+}
+
+function startSession(name){
+  session = { tech:name, items:[] };
+  currentItem = null; currentQty = 1;
+  document.getElementById('scanTechLabel').textContent = name;
+  document.getElementById('detectedWrap').style.display = 'none';
+  document.getElementById('cartPreview').style.display = 'none';
+  setMode('scan');
+  showScreen('s-scan');
+}
+
+// ════════════════════════════════════════════════════════
+// SCAN / PICK MODES
+// ════════════════════════════════════════════════════════
+function setMode(m){
+  scanMode = m;
+  document.getElementById('tabScan').classList.toggle('active', m==='scan');
+  document.getElementById('tabPick').classList.toggle('active', m==='pick');
+  document.getElementById('modeScan').style.display = m==='scan' ? '' : 'none';
+  document.getElementById('modePick').style.display = m==='pick' ? '' : 'none';
+  if(m==='scan'){ startCam(); renderPickList(); }
+  else { stopCam(); renderPickList(); }
+  clearDetected();
+}
+
+// ─── CAMERA / ZXING ───
+async function startCam(){
+  if(camStream) return;
+  if(scanMode !== 'scan') return;
+  const video = document.getElementById('scanVideo');
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } });
+    video.srcObject = camStream;
+    startDecoder();
+  } catch(e){
+    setScanStatus('⚠️ Camera unavailable — use manual entry','err');
+  }
+}
+
+function stopCam(){
+  if(codeReader){ try{ codeReader.reset(); }catch(e){} codeReader=null; }
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
+  document.getElementById('scanVideo').srcObject = null;
+}
+
+function startDecoder(){
+  if(!window.ZXing){ setScanStatus('⚠️ Scanner library not loaded','err'); return; }
+  try {
+    codeReader = new ZXing.BrowserMultiFormatReader();
+    const video = document.getElementById('scanVideo');
+    setScanStatus('🔍 Searching for barcode…','');
+    codeReader.decodeFromVideoElement(video,(result,err)=>{
+      if(result) handleBarcode(result.getText());
+    });
+  } catch(e){ setScanStatus('⚠️ Decoder error','err'); }
+}
+
+function setScanStatus(msg, cls=''){
+  const el = document.getElementById('scanStatus');
+  el.textContent = msg;
+  el.className = 'scan-status ' + cls;
+}
+
+// ─── BARCODE RESOLVED ───
+function handleBarcode(bc){
+  if(currentItem && currentItem.barcode === bc) return; // already showing
+  const name = barcodeMap[bc];
+  if(name){
+    showDetected(name, bc);
+    setScanStatus('✓ Item found: ' + name,'ok');
+  } else {
+    // Unknown barcode — prompt pick
+    setScanStatus('⚠️ Unknown barcode. Please select item from list.','err');
+    setMode('pick');
+    // Store pending barcode so we can attach it after pick
+    window._pendingBarcode = bc;
+    toast('Barcode scanned — please select the matching item','warn');
+  }
+}
+
+// ─── MANUAL ENTRY ───
+function doManual(){
+  const val = document.getElementById('manualInput').value.trim();
+  if(!val) return;
+  // Check barcode map first
+  if(barcodeMap[val]){ showDetected(barcodeMap[val], val); document.getElementById('manualInput').value=''; return; }
+  // Check inventory name
+  const match = INVENTORY.find(i=>i.toLowerCase()===val.toLowerCase());
+  if(match){ showDetected(match,'manual'); document.getElementById('manualInput').value=''; return; }
+  // Partial match
+  const partial = INVENTORY.find(i=>i.toLowerCase().includes(val.toLowerCase()));
+  if(partial){ showDetected(partial,'manual'); document.getElementById('manualInput').value=''; return; }
+  toast('Item not found — try picking from list','err');
+}
+
+// ─── PICK LIST ───
+function renderPickList(){
+  const q = (document.getElementById('pickSearch')||{}).value||'';
+  const list = document.getElementById('pickList');
+  list.innerHTML = '';
+  INVENTORY
+    .filter(i=>!q || i.toLowerCase().includes(q.toLowerCase()))
+    .forEach(name=>{
+      const bc = Object.keys(barcodeMap).find(k=>barcodeMap[k]===name)||'';
+      const sel = currentItem && currentItem.name===name;
+      const row = document.createElement('div');
+      row.className = 'item-pick-row' + (sel?' selected':'');
+      row.innerHTML = `
+        <div>
+          <div class="item-pick-name">${name}</div>
+          ${bc ? `<div class="item-pick-bc">${bc}</div>` : ''}
+        </div>
+        <div class="pick-check">${sel?'✓':''}</div>`;
+      row.onclick = ()=>{ 
+        const pendingBc = window._pendingBarcode || 'manual';
+        window._pendingBarcode = null;
+        showDetected(name, pendingBc); 
+      };
+      list.appendChild(row);
+    });
+}
+
+// ─── SHOW DETECTED ───
+function showDetected(name, bc){
+  currentItem = { name, barcode: bc };
+  currentQty  = 1;
+  document.getElementById('detName').textContent = name;
+  document.getElementById('detBc').textContent   = bc !== 'manual' ? bc : 'Manual entry';
+  document.getElementById('qtyNum').textContent  = 1;
+  document.getElementById('detectedWrap').style.display = '';
+  renderPickList(); // re-render to show selection
+}
+
+function clearDetected(){
+  currentItem = null; currentQty = 1;
+  document.getElementById('detectedWrap').style.display = 'none';
+}
+
+function adjQty(d){
+  currentQty = Math.max(1, currentQty + d);
+  document.getElementById('qtyNum').textContent = currentQty;
+}
+
+// ─── ADD TO CART ───
+function commitItem(){
+  if(!currentItem) return false;
+  // Merge with existing if same item
+  const existing = session.items.find(i=>i.name===currentItem.name);
+  if(existing){ existing.qty += currentQty; }
+  else { session.items.push({ name:currentItem.name, barcode:currentItem.barcode, qty:currentQty }); }
+  clearDetected();
+  document.getElementById('manualInput').value = '';
+  setScanStatus('✓ Added! Scan next item…','ok');
+  setTimeout(()=>setScanStatus('🔍 Searching for barcode…',''),2000);
+  renderMiniCart();
+  updateHdr();
+  updateSteps();
+  return true;
+}
+
+function addAndNext(){ if(commitItem()){ toast('Item added — scan next!'); setMode('scan'); } }
+function addAndFinish(){ if(commitItem()){ showScreen('s-summary'); } }
+
+// ─── MINI CART ───
+function renderMiniCart(){
+  const n = session.items.length;
+  document.getElementById('cartPreview').style.display = n>0 ? '' : 'none';
+  document.getElementById('cartCount').textContent = n;
+  const mc = document.getElementById('miniCart');
+  mc.innerHTML = '';
+  session.items.forEach((it,i)=>{
+    const row = document.createElement('div');
+    row.className = 'cart-item';
+    row.innerHTML = `
+      <div class="ci-info"><div class="ci-name">${it.name}</div></div>
+      <div class="ci-qty">×${it.qty}</div>
+      <button class="ci-del" onclick="removeItem(${i})">✕</button>`;
+    mc.appendChild(row);
+  });
+}
+
+function removeItem(i){ session.items.splice(i,1); renderMiniCart(); updateHdr(); updateSteps(); }
+
+function updateSteps(){
+  const n = session.items.length;
+  const el = document.getElementById('stepDots');
+  el.innerHTML = '';
+  const total = Math.max(n, 1);
+  for(let i=0;i<total;i++){
+    const d = document.createElement('div');
+    d.className = 'step-dot done';
+    el.appendChild(d);
+  }
+  // current
+  const cur = document.createElement('div');
+  cur.className = 'step-dot on';
+  el.appendChild(cur);
+}
+
+// ════════════════════════════════════════════════════════
+// SUMMARY
+// ════════════════════════════════════════════════════════
+function renderSummary(){
+  document.getElementById('sumTech').textContent = session.tech;
+  const list = document.getElementById('summaryList');
+  list.innerHTML = '';
+  session.items.forEach((it,i)=>{
+    const row = document.createElement('div');
+    row.className = 'cart-item';
+    row.innerHTML = `
+      <div class="ci-info"><div class="ci-name">${it.name}</div></div>
+      <div class="ci-qty">×${it.qty}</div>
+      <button class="ci-del" onclick="removeFromSummary(${i})">✕</button>`;
+    list.appendChild(row);
+  });
+  document.getElementById('sumTotal').textContent = session.items.length + ' line' + (session.items.length!==1?'s':'');
+}
+
+function removeFromSummary(i){ session.items.splice(i,1); renderSummary(); }
+
+// ════════════════════════════════════════════════════════
+// SUBMIT
+// ════════════════════════════════════════════════════════
+async function submitSession(){
+  if(!session.items.length){ toast('No items to submit!','err'); return; }
+
+  const now   = new Date();
+  const dateStr = now.toLocaleDateString('en-US');
+  const timeStr = now.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'});
+
+  // Build qty map for each sheet column
+  const qtyMap = {};
+  INVENTORY.forEach(n=>{ qtyMap[n] = 0; });
+  session.items.forEach(it=>{ if(qtyMap[it.name]!==undefined) qtyMap[it.name] += it.qty; });
+
+  const payload = {
+    date: dateStr,
+    time: timeStr,
+    tech: session.tech,
+    items: qtyMap,         // Sheet 1 (raw log)
+    rawItems: session.items // for local log display
+  };
+
+  // Save locally
+  localLog.unshift({ ...payload, submittedAt: now.toISOString() });
+  save();
+
+  // Send to Google Sheets
+  if(webhook){
+    document.getElementById('overlay').classList.add('show');
+    try {
+      await fetch(webhook, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify(payload)
+      });
+      document.getElementById('overlay').classList.remove('show');
+      toast('✓ Submitted to Google Sheets!');
+    } catch(e){
+      document.getElementById('overlay').classList.remove('show');
+      toast('Sheet error — saved locally','warn');
+    }
+  } else {
+    toast('✓ Saved locally (no webhook set)','warn');
+  }
+
+  session = { tech:'', items:[] };
+  showScreen('s-home');
+}
+
+function cancelSession(){
+  stopCam();
+  session = { tech:'', items:[] };
+  showScreen('s-home');
+}
+
+// ════════════════════════════════════════════════════════
+// LOG
+// ════════════════════════════════════════════════════════
+function filterLog(f){
+  ['All','Today'].forEach(t=>{ document.getElementById('tab'+t).classList.remove('active'); });
+  document.getElementById('tab'+(f==='all'?'All':'Today')).classList.add('active');
+  renderLog(f);
+}
+
+function renderLog(f){
+  const list = document.getElementById('logList');
+  let entries = localLog;
+  if(f==='today'){
+    const today = new Date().toLocaleDateString('en-US');
+    entries = entries.filter(e=>e.date===today);
+  }
+  if(!entries.length){
+    list.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>No entries yet</div>';
+    return;
+  }
+  list.innerHTML = '';
+  entries.forEach(e=>{
+    const itemsText = (e.rawItems||[]).map(i=>`${i.name} ×${i.qty}`).join(' · ') || Object.entries(e.items||{}).filter(([,v])=>v>0).map(([k,v])=>`${k} ×${v}`).join(' · ');
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerHTML = `
+      <div class="log-hdr">
+        <div class="log-tech">${e.tech}</div>
+        <div class="log-time">${e.date}<br>${e.time||''}</div>
+      </div>
+      <div class="log-items-text">${itemsText||'—'}</div>
+      <div><span class="log-badge">${(e.rawItems||[]).length} item type${(e.rawItems||[]).length!==1?'s':''}</span></div>`;
+    list.appendChild(div);
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// SETUP
+// ════════════════════════════════════════════════════════
+function renderSetup(){
+  document.getElementById('webhookInput').value = webhook;
+  updateWebhookStatus();
+
+  // Barcode map list
+  const bml = document.getElementById('barcodeMapList');
+  bml.innerHTML = '';
+  Object.entries(barcodeMap).forEach(([bc,name])=>{
+    const row = document.createElement('div');
+    row.className = 'tech-manage-row';
+    row.innerHTML = `
+      <div><div class="tech-manage-name">${name}</div><div style="font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--text-muted)">${bc}</div></div>
+      <button class="ci-del" onclick="removeBarcodeMap('${bc}')">✕</button>`;
+    bml.appendChild(row);
+  });
+  if(!Object.keys(barcodeMap).length) bml.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted)">No barcodes mapped yet.</div>';
+
+  // Populate item select
+  const sel = document.getElementById('newBcItem');
+  sel.innerHTML = INVENTORY.map(i=>`<option value="${i}">${i}</option>`).join('');
+
+  // Tech list
+  const tl = document.getElementById('techManageList');
+  tl.innerHTML = '';
+  techs.forEach((n,i)=>{
+    const row = document.createElement('div');
+    row.className = 'tech-manage-row';
+    row.innerHTML = `<div class="tech-manage-name">${n}</div><button class="ci-del" onclick="removeTech(${i})">✕</button>`;
+    tl.appendChild(row);
+  });
+}
+
+function saveWebhook(){
+  webhook = document.getElementById('webhookInput').value.trim();
+  ls('sr_webhook', webhook);
+  updateWebhookStatus();
+}
+function updateWebhookStatus(){
+  const el = document.getElementById('webhookStatus');
+  if(webhook && webhook.includes('script.google.com')){
+    el.className='setup-status ok'; el.textContent='✓ Webhook configured — ready to sync';
+  } else if(webhook){
+    el.className='setup-status'; el.textContent='⚠️ URL doesn\'t look like an Apps Script URL';
+  } else {
+    el.className='setup-status'; el.textContent='⚪ No webhook — data saves locally only';
+  }
+}
+
+function addBarcodeMap(){
+  const bc = document.getElementById('newBc').value.trim();
+  const name = document.getElementById('newBcItem').value;
+  if(!bc){ toast('Enter a barcode','err'); return; }
+  barcodeMap[bc] = name;
+  save(); renderSetup();
+  document.getElementById('newBc').value = '';
+  toast('Barcode mapped!');
+}
+function removeBarcodeMap(bc){ delete barcodeMap[bc]; save(); renderSetup(); }
+
+function addTech(){
+  const n = document.getElementById('newTechInput').value.trim();
+  if(!n) return;
+  if(techs.includes(n)){ toast('Already in list','warn'); return; }
+  techs.push(n); save(); renderSetup();
+  document.getElementById('newTechInput').value = '';
+  toast('Tech added!');
+}
+function removeTech(i){ techs.splice(i,1); save(); renderSetup(); }
+
+// ════════════════════════════════════════════════════════
+// HEADER
+// ════════════════════════════════════════════════════════
+function updateHdr(){
+  const inSession = !!session.tech;
+  document.getElementById('hdrSession').style.display = inSession?'':'none';
+  if(inSession){
+    document.getElementById('hdrTech').textContent = session.tech;
+    const n = session.items.reduce((a,i)=>a+i.qty,0);
+    document.getElementById('hdrCount').textContent = n + ' unit' + (n!==1?'s':'');
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// TOAST
+// ════════════════════════════════════════════════════════
+let toastTimer;
+function toast(msg, type=''){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (type?' '+type:'');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ el.classList.remove('show'); },2800);
+}
+
+// ════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════
+renderTechGrid();
+</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     GOOGLE APPS SCRIPT — paste this into your Sheet's Script Editor
+     Tools → Apps Script → paste → Deploy → Web App
+═══════════════════════════════════════════════════════════ -->
+<!--
+=== APPS SCRIPT CODE (paste into Tools > Apps Script) ===
+
+const SHEET_ID = 'YOUR_GOOGLE_SHEET_ID_HERE'; // from your sheet URL
+
+const SHEET1_NAME = 'Raw Log';    // Sheet 1 — app writes raw rows here
+const SHEET2_NAME = 'Checkout';   // Sheet 2 — your formatted sheet with the columns
+
+// Column order in Sheet 2 (must match your actual columns exactly)
+const SHEET2_COLS = [
+  'Date','Tech Name',
+  'Lactated Ringers','Tubing','22G ViaValve','20G Viavalve',
+  'Vial adapter','Curos Caps','5ml Syringe','20G Needle',
+  'Zofran','Toradol','Pepcid','Benadryl','Phenergan','Dex',
+  'Coban','B-Complex','B-12','Zinc','Magnesium','Vitamin C',
+  'Glutathione','Tri-immune','NAD+',
+  'Total Value','Are you sending Zelle','Status'
+];
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const ss   = SpreadsheetApp.openById(SHEET_ID);
+
+    // ── Sheet 1: Raw Log ──
+    let s1 = ss.getSheetByName(SHEET1_NAME);
+    if (!s1) {
+      s1 = ss.insertSheet(SHEET1_NAME);
+      s1.appendRow(['Timestamp','Date','Tech','Items JSON']);
+    }
+    s1.appendRow([
+      new Date().toISOString(),
+      data.date,
+      data.tech,
+      JSON.stringify(data.items)
+    ]);
+
+    // ── Sheet 2: Formatted Checkout ──
+    let s2 = ss.getSheetByName(SHEET2_NAME);
+    if (!s2) {
+      s2 = ss.insertSheet(SHEET2_NAME);
+      s2.appendRow(SHEET2_COLS); // write header if sheet is new
+    }
+
+    // Build row matching SHEET2_COLS order
+    const row = SHEET2_COLS.map(col => {
+      if (col === 'Date')      return data.date + ' ' + (data.time || '');
+      if (col === 'Tech Name') return data.tech;
+      // Leave Total Value, Zelle, Status blank for formula/manual fill
+      if (['Total Value','Are you sending Zelle','Status'].includes(col)) return '';
+      // Inventory quantities
+      return (data.items && data.items[col] !== undefined) ? data.items[col] : 0;
+    });
+
+    s2.appendRow(row);
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// Allow GET for testing
+function doGet() {
+  return ContentService.createTextOutput('StockRoom webhook is live ✓');
+}
+
+=== DEPLOY STEPS ===
+1. Open your Google Sheet
+2. Click Extensions → Apps Script
+3. Delete any existing code, paste the above
+4. Change SHEET_ID to your Sheet's ID (the long string in the URL)
+5. Change SHEET1_NAME / SHEET2_NAME to match your actual sheet tab names
+6. Click Deploy → New Deployment
+7. Type: Web App | Execute as: Me | Who has access: Anyone
+8. Click Deploy → copy the Web App URL
+9. Paste that URL into the app's ⚙️ Setup screen
+-->
+
+</body>
+</html>
