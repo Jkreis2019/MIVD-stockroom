@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MIVD Stockroom</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0d1117;
+  --surface: #161b27;
+  --surface2: #1e2535;
+  --border: #2a3148;
+  --accent: #00e5a0;
+  --accent-glow: rgba(0,229,160,0.12);
+  --accent-dim: #0a3d2a;
+  --accent2: #4d8bff;
+  --warn: #ffb547;
+  --danger: #ff5263;
+  --text: #dde3f5;
+  --muted: #5a6488;
+  --r: 14px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: 'Syne', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+
+/* HEADER */
+.hdr { width: 100%; max-width: 500px; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 90; background: rgba(13,17,23,0.95); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
+.hdr-logo { font-size: 1rem; font-weight: 800; }
+.hdr-logo span { color: var(--accent); }
+.hdr-right { display: flex; gap: 8px; align-items: center; }
+.hdr-info { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--muted); text-align: right; line-height: 1.5; }
+.hdr-info b { color: var(--accent2); }
+.icon-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; color: var(--muted); cursor: pointer; font-size: 0.9rem; transition: all .15s; }
+.icon-btn:hover { color: var(--text); border-color: var(--accent); }
+
+/* SCREENS */
+.screen { display: none; width: 100%; max-width: 500px; padding: 24px 18px 50px; flex-direction: column; gap: 18px; }
+.screen.active { display: flex; animation: up .25s ease; }
+@keyframes up { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+
+/* TYPE */
+.eyebrow { font-size: 0.65rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+h1 { font-size: 1.9rem; font-weight: 800; line-height: 1.1; }
+h2 { font-size: 1.2rem; font-weight: 700; }
+
+/* CARDS */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+
+/* BUTTONS */
+.btn { border: none; border-radius: 12px; padding: 15px 18px; width: 100%; font-family: 'Syne', sans-serif; font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; gap: 7px; }
+.btn-primary { background: var(--accent); color: #041a0f; }
+.btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.btn-ghost { background: var(--surface2); color: var(--text); border: 1.5px solid var(--border); }
+.btn-ghost:hover { border-color: var(--accent2); color: var(--accent2); }
+.btn-danger { background: rgba(255,82,99,.1); color: var(--danger); border: 1.5px solid rgba(255,82,99,.25); }
+.btn-row { display: flex; gap: 10px; }
+.btn-row .btn { flex: 1; }
+
+/* LOCATION LIST */
+.loc-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--r); padding: 18px; cursor: pointer; display: flex; align-items: center; gap: 14px; transition: all .15s; }
+.loc-card:hover { border-color: var(--accent); background: var(--accent-glow); transform: translateY(-1px); }
+.loc-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--accent-dim); color: var(--accent); font-size: 1.3rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.loc-name { font-weight: 700; font-size: 1rem; }
+.loc-count { font-size: 0.73rem; color: var(--muted); font-family: 'DM Mono', monospace; }
+.loc-arrow { color: var(--muted); margin-left: auto; font-size: 1.2rem; }
+
+/* TECH GRID */
+.tech-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tech-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--r); padding: 18px 12px 14px; cursor: pointer; text-align: center; transition: all .15s; display: flex; flex-direction: column; align-items: center; gap: 9px; font-family: 'Syne', sans-serif; }
+.tech-card:hover, .tech-card:active { border-color: var(--accent); background: var(--accent-glow); transform: translateY(-2px); }
+.avatar { width: 42px; height: 42px; border-radius: 50%; background: var(--accent-dim); color: var(--accent); font-size: 1rem; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.tech-name { font-weight: 700; font-size: 0.9rem; color: var(--text); }
+
+/* TABS */
+.tabs { display: flex; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 4px; gap: 4px; }
+.tab { flex: 1; padding: 9px; border: none; border-radius: 7px; background: transparent; color: var(--muted); font-family: 'Syne', sans-serif; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: all .15s; }
+.tab.active { background: var(--surface); color: var(--accent); border: 1px solid var(--border); }
+
+/* SCAN BOX */
+.scan-box { position: relative; border-radius: var(--r); overflow: hidden; background: #000; aspect-ratio: 4/3; border: 2px solid var(--border); }
+#scanVideo { width: 100%; height: 100%; }
+.scan-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.scan-frame { width: 58%; aspect-ratio: 1; border: 2px solid var(--accent); border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0,0,0,.5); position: relative; }
+.scan-beam { position: absolute; left: 6px; right: 6px; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: beam 2s ease-in-out infinite; }
+@keyframes beam { 0%,100%{top:8%;opacity:.7} 50%{top:88%;opacity:1} }
+.scan-hint { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 0.7rem; color: rgba(255,255,255,.5); }
+.scan-status { font-family: 'DM Mono', monospace; font-size: 0.78rem; text-align: center; color: var(--muted); padding: 4px 0; }
+.scan-status.ok { color: var(--accent); }
+.scan-status.err { color: var(--danger); }
+
+/* DETECTED ITEM */
+.detected-card { background: var(--accent-glow); border: 1.5px solid var(--accent); border-radius: var(--r); padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+.det-header { display: flex; justify-content: space-between; align-items: flex-start; }
+.det-name { font-size: 1.1rem; font-weight: 800; color: var(--accent); }
+.det-bc { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+.qty-area { display: flex; align-items: center; justify-content: center; gap: 20px; padding: 8px 0; }
+.qty-btn { width: 52px; height: 52px; border-radius: 50%; border: 1.5px solid var(--border); background: var(--surface2); color: var(--text); font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s; flex-shrink: 0; font-family: 'Syne', sans-serif; }
+.qty-btn:hover { border-color: var(--accent); color: var(--accent); }
+.qty-num { font-size: 3rem; font-weight: 800; min-width: 60px; text-align: center; }
+
+/* ITEM PICKER */
+.search-input { width: 100%; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 14px; font-family: 'DM Mono', monospace; font-size: 0.9rem; color: var(--text); }
+.search-input:focus { outline: none; border-color: var(--accent2); }
+.pick-list { display: flex; flex-direction: column; gap: 6px; max-height: 340px; overflow-y: auto; }
+.pick-row { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 14px; cursor: pointer; transition: all .15s; }
+.pick-row:hover { border-color: var(--accent); }
+.pick-row.selected { border-color: var(--accent); background: var(--accent-glow); }
+.pick-name { font-weight: 600; font-size: 0.9rem; }
+.pick-check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; flex-shrink: 0; }
+.pick-row.selected .pick-check { background: var(--accent); border-color: var(--accent); color: #041a0f; }
+
+/* INPUT */
+input[type=text], input[type=password], input[type=number] { background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 14px; font-family: 'DM Mono', monospace; font-size: 0.9rem; color: var(--text); width: 100%; transition: border-color .15s; }
+input:focus { outline: none; border-color: var(--accent2); }
+.input-row { display: flex; gap: 8px; }
+.input-row input { flex: 1; }
+.input-row .btn { width: auto; padding: 12px 16px; flex-shrink: 0; }
+
+/* CART */
+.cart-item { display: flex; align-items: center; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; gap: 10px; }
+.ci-name { font-weight: 600; font-size: 0.9rem; flex: 1; }
+.ci-qty { font-family: 'DM Mono', monospace; font-weight: 700; font-size: 1rem; color: var(--accent); background: var(--accent-dim); padding: 4px 12px; border-radius: 20px; flex-shrink: 0; }
+.ci-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; padding: 4px; flex-shrink: 0; transition: color .15s; }
+.ci-del:hover { color: var(--danger); }
+.cart-total { display: flex; justify-content: space-between; padding: 10px 2px; border-top: 1px solid var(--border); font-size: 0.82rem; color: var(--muted); }
+.cart-total strong { color: var(--text); }
+
+/* LOG */
+.log-entry { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 16px; display: flex; flex-direction: column; gap: 7px; }
+.log-hdr { display: flex; justify-content: space-between; align-items: flex-start; }
+.log-tech { font-weight: 700; font-size: 0.95rem; }
+.log-time { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--muted); text-align: right; }
+.log-detail { font-size: 0.8rem; color: var(--muted); line-height: 1.65; }
+.badge { font-family: 'DM Mono', monospace; font-size: 0.68rem; background: var(--accent-dim); color: var(--accent); padding: 3px 9px; border-radius: 20px; }
+
+/* SETUP */
+.setup-row { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+.setup-row-name { font-weight: 600; font-size: 0.88rem; }
+.setup-status { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--muted); }
+.setup-status.ok { color: var(--accent); }
+
+/* ZELLE BTNS */
+.zelle-btn { border: none; border-radius: 14px; padding: 22px; width: 100%; font-family: 'Syne', sans-serif; font-size: 1.05rem; font-weight: 700; cursor: pointer; transition: all .15s; }
+.zelle-yes { background: var(--accent); color: #041a0f; }
+.zelle-no  { background: var(--surface2); color: var(--text); border: 1.5px solid var(--border); }
+.zelle-na  { background: var(--surface2); color: var(--muted); border: 1.5px solid var(--border); }
+
+/* STEPS */
+.steps { display: flex; gap: 5px; align-items: center; }
+.step-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); transition: all .2s; }
+.step-dot.on { background: var(--accent); width: 20px; border-radius: 3px; }
+.step-dot.done { background: var(--accent-dim); }
+
+/* OVERLAY */
+.overlay { position: fixed; inset: 0; background: rgba(13,17,23,.88); display: none; align-items: center; justify-content: center; flex-direction: column; gap: 16px; z-index: 200; }
+.overlay.show { display: flex; }
+.spinner { width: 44px; height: 44px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .75s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* TOAST */
+.toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--surface); border: 1px solid var(--accent); color: var(--accent); padding: 11px 22px; border-radius: 40px; font-weight: 700; font-size: 0.88rem; z-index: 300; transition: transform .3s cubic-bezier(.34,1.56,.64,1); white-space: nowrap; pointer-events: none; }
+.toast.show { transform: translateX(-50%) translateY(0); }
+.toast.err  { border-color: var(--danger); color: var(--danger); }
+.toast.warn { border-color: var(--warn); color: var(--warn); }
+
+.empty { text-align: center; padding: 40px 20px; color: var(--muted); }
+.empty-icon { font-size: 2rem; margin-bottom: 10px; }
+::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-logo"><span>MIVD</span> Stockroom</div>
+  <div class="hdr-right">
+    <div class="hdr-info" id="hdrInfo" style="display:none"><b id="hdrTech">—</b><br><span id="hdrCount">0 units</span></div>
+    <button class="icon-btn" onclick="nav('log')">📋</button>
+    <button class="icon-btn" onclick="goSettings()">⚙️</button>
+  </div>
+</div>
+
+<!-- ── SCREEN: HOME (pick location) ── -->
+<div class="screen active" id="s-home">
+  <div><div class="eyebrow">MIVD Stockroom</div><h1>Select your<br>location</h1></div>
+  <div id="locList"></div>
+</div>
+
+<!-- ── SCREEN: TECH ── -->
+<div class="screen" id="s-tech">
+  <div><div class="eyebrow" id="techLocLabel">—</div><h1>Who's checking<br>out stock?</h1></div>
+  <div class="tech-grid" id="techGrid"></div>
+  <button class="btn btn-ghost" onclick="nav('home')">← Change Location</button>
+</div>
+
+<!-- ── SCREEN: SCAN ── -->
+<div class="screen" id="s-scan">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div><div class="eyebrow">Session</div><div style="font-weight:700;font-size:1rem" id="scanLabel">—</div></div>
+    <div class="steps" id="stepDots"></div>
+  </div>
+
+  <!-- tabs -->
+  <div class="tabs" id="scanTabs">
+    <button class="tab active" id="tabScan" onclick="switchTab('scan')">📷 Scan</button>
+    <button class="tab" id="tabPick" onclick="switchTab('pick')">📋 Pick from List</button>
+  </div>
+
+  <!-- scan mode -->
+  <div id="paneScan">
+    <div class="scan-box">
+      <div id="scanVideo"></div>
+      <div class="scan-overlay"><div class="scan-frame"><div class="scan-beam"></div></div></div>
+      <div class="scan-hint">Align barcode within box</div>
+    </div>
+    <div class="scan-status" id="scanStatus">🔍 Searching for barcode…</div>
+    <div style="margin-top:8px">
+      <div class="eyebrow" style="margin-bottom:6px">Or enter manually</div>
+      <div class="input-row">
+        <input type="text" id="manualInput" placeholder="Barcode or item name…" onkeydown="if(event.key==='Enter')doManual()">
+        <button class="btn btn-ghost" style="width:auto;padding:12px 16px" onclick="doManual()">Go</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- pick mode -->
+  <div id="panePick" style="display:none">
+    <div id="scannedBcDisplay" style="display:none;background:var(--surface2);border:1px solid var(--warn);border-radius:10px;padding:10px 14px;margin-bottom:8px">
+      <div class="eyebrow" style="color:var(--warn)">Scanned barcode value</div>
+      <div id="scannedBcVal" style="font-family:'DM Mono',monospace;font-size:0.9rem;color:var(--text);margin-top:4px"></div>
+    </div>
+    <input type="text" class="search-input" id="pickSearch" placeholder="🔍 Search items…" oninput="renderPickList()">
+    <div class="pick-list" id="pickList" style="margin-top:8px"></div>
+  </div>
+
+  <!-- quantity card (shown after item selected) -->
+  <div id="qtyCard" style="display:none">
+    <div class="detected-card">
+      <div class="det-header">
+        <div>
+          <div class="det-name" id="detName">—</div>
+          <div class="det-bc" id="detBc">—</div>
+        </div>
+        <button class="ci-del" style="font-size:1.3rem" onclick="cancelItem()">✕</button>
+      </div>
+      <div>
+        <div class="eyebrow" style="margin-bottom:10px;text-align:center">How many?</div>
+        <div class="qty-area">
+          <button class="qty-btn" onclick="adjQty(-1)">−</button>
+          <div class="qty-num" id="qtyNum">1</div>
+          <button class="qty-btn" onclick="adjQty(1)">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="btn-row" style="margin-top:12px">
+      <button class="btn btn-ghost" onclick="addNext()">＋ Next Item</button>
+      <button class="btn btn-primary" onclick="addFinish()">✓ Finish</button>
+    </div>
+  </div>
+
+  <!-- mini cart -->
+  <div id="miniCartWrap" style="display:none">
+    <div class="eyebrow" style="margin-bottom:6px">In cart (<span id="cartCount">0</span>)</div>
+    <div id="miniCart" style="display:flex;flex-direction:column;gap:6px"></div>
+  </div>
+
+  <button class="btn btn-danger" onclick="cancelSession()">✕ Cancel Session</button>
+</div>
+
+<!-- ── SCREEN: ZELLE ── -->
+<div class="screen" id="s-zelle">
+  <div><div class="eyebrow">Almost done!</div><h1>Are you sending<br>Zelle?</h1></div>
+  <div style="font-size:0.88rem;color:var(--muted)">This will be recorded on your checkout sheet.</div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <button class="zelle-btn zelle-yes" onclick="setZelle('Yes')">✓ Yes, sending Zelle</button>
+    <button class="zelle-btn zelle-no"  onclick="setZelle('No')">✕ No</button>
+    <button class="zelle-btn zelle-na"  onclick="setZelle('N/A')">— N/A</button>
+  </div>
+  <button class="btn btn-danger" onclick="cancelSession()">✕ Cancel Session</button>
+</div>
+
+<!-- ── SCREEN: SUMMARY ── -->
+<div class="screen" id="s-summary">
+  <div><div class="eyebrow">Review before submitting</div><h2 id="sumLabel">—</h2></div>
+  <div class="card">
+    <div class="eyebrow">Items checked out</div>
+    <div id="sumList" style="display:flex;flex-direction:column;gap:7px"></div>
+    <div class="cart-total"><span>Total line items</span><strong id="sumTotal">0</strong></div>
+  </div>
+  <div class="card" id="sumZelleRow">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div><div class="eyebrow">Sending Zelle?</div><div style="font-weight:700;font-size:1rem" id="sumZelle">—</div></div>
+      <button class="btn btn-ghost" style="width:auto;padding:8px 14px;font-size:0.82rem" onclick="nav('zelle')">Change</button>
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-ghost" onclick="nav('scan')">← Edit</button>
+    <button class="btn btn-primary" onclick="submitSession()">Submit ✓</button>
+  </div>
+  <button class="btn btn-danger" onclick="cancelSession()">✕ Cancel Session</button>
+</div>
+
+<!-- ── SCREEN: LOG ── -->
+<div class="screen" id="s-log">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div><div class="eyebrow">History</div><h2>Checkout Log</h2></div>
+    <button class="btn btn-ghost" style="width:auto;padding:9px 14px;font-size:0.82rem" onclick="nav('home')">← Home</button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" id="tabAll"   onclick="filterLog('all')">All</button>
+    <button class="tab"       id="tabToday" onclick="filterLog('today')">Today</button>
+  </div>
+  <div id="logList" style="display:flex;flex-direction:column;gap:10px"></div>
+</div>
+
+<!-- ── SCREEN: PASSWORD ── -->
+<div class="screen" id="s-password">
+  <div><div class="eyebrow">Admin Access</div><h1>Enter password<br>to continue</h1></div>
+  <input type="password" id="pwInput" placeholder="Password…" onkeydown="if(event.key==='Enter')checkPw()">
+  <button class="btn btn-primary" onclick="checkPw()">Unlock ✓</button>
+  <div id="pwErr" style="color:var(--danger);font-size:0.85rem;text-align:center;display:none">❌ Incorrect password</div>
+  <button class="btn btn-ghost" onclick="nav('home')">← Cancel</button>
+</div>
+
+<!-- ── SCREEN: SETUP ── -->
+<div class="screen" id="s-setup">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div><div class="eyebrow">Admin</div><h2>⚙️ Setup</h2></div>
+    <button class="btn btn-ghost" style="width:auto;padding:9px 14px;font-size:0.82rem" onclick="nav('home')">← Home</button>
+  </div>
+
+  <!-- Webhook -->
+  <div class="card">
+    <div class="eyebrow">Google Sheets Webhook</div>
+    <input type="text" id="webhookInput" placeholder="https://script.google.com/macros/s/…/exec" oninput="saveWebhook()">
+    <div class="setup-status" id="webhookStatus">⚪ No webhook — saves locally only</div>
+  </div>
+
+  <!-- Barcode map -->
+  <div class="card">
+    <div class="eyebrow">Barcode → Item Mapping</div>
+    <div id="bcMapList" style="display:flex;flex-direction:column;gap:6px"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+      <input type="text" id="newBc" placeholder="Barcode number…" style="flex:1;min-width:100px">
+      <select id="newBcItem" style="flex:2;min-width:130px;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:12px 10px;color:var(--text);font-family:'Syne',sans-serif;font-size:0.82rem"></select>
+      <button class="btn btn-ghost" style="width:auto;padding:12px 14px" onclick="addBcMap()">Add</button>
+    </div>
+  </div>
+
+  <!-- Locations & Techs -->
+  <div class="card">
+    <div class="eyebrow">Locations &amp; Technicians</div>
+    <div id="locTechList"></div>
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <div class="eyebrow" style="margin-bottom:6px">Add New Location</div>
+      <div class="input-row">
+        <input type="text" id="newLocInput" placeholder="Location name…" onkeydown="if(event.key==='Enter')addLoc()">
+        <button class="btn btn-ghost" style="width:auto;padding:12px 14px" onclick="addLoc()">Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Overlay -->
+<div class="overlay" id="overlay">
+  <div class="spinner"></div>
+  <div style="color:var(--muted);font-size:0.88rem">Sending to Google Sheets…</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+// INVENTORY PER LOCATION
+// ══════════════════════════════════════════
+const BASE = [
+  "Lactated Ringers","Tubing","22G ViaValve","20G Viavalve",
+  "Vial adapter","Curos Caps","5ml Syringe","20G Needle",
+  "Zofran","Toradol","Pepcid","Benadryl","Phenergan","Dex",
+  "Coban","B-Complex","B-12","Zinc","Magnesium","Vitamin C",
+  "Glutathione","Tri-immune","NAD+"
+];
+const LOC_INVENTORY = {
+  "Phoenix":   [...BASE, "Kits"],
+  "Las Vegas": [...BASE],
+  "Tucson":    [...BASE],
+  "NYC":       [...BASE, "Kits","10ml Syringe","3ml Syringe","24ga Viavalve","2x2","Alcohol Preps","Tourniquet","Tegaderm"]
+};
+function getInv(loc){ return LOC_INVENTORY[loc] || BASE; }
+
+// ══════════════════════════════════════════
+// ADMIN PASSWORD
+// ══════════════════════════════════════════
+const ADMIN_PW = 'mivd2024'; // change this to your password
+
+// ══════════════════════════════════════════
+// DEFAULT DATA
+// ══════════════════════════════════════════
+const DEFAULT_LOCS = {
+  "Phoenix":   ["Joshua K.","Colleen","Derric C.","Edgar","Jid","Troy","Gretchen","Mathew"],
+  "Las Vegas": ["John","Marina","Phil","Xandra","Dave","Tiffani"],
+  "Tucson":    ["Katt","Kristopher","Michael L.","Michael P.","Jade"],
+  "NYC":       ["Chelsea","Ishani","Michala","Ryan","Mike","Arrea","Egzon","Nick","Yulia","Yosef"]
+};
+
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+function lsGet(k){ return localStorage.getItem(k); }
+function lsSet(k,v){ localStorage.setItem(k,v); }
+
+let locations  = JSON.parse(lsGet('sr_locs') || JSON.stringify(DEFAULT_LOCS));
+let localLog   = JSON.parse(lsGet('sr_log')  || '[]');
+const DEFAULT_BC = {
+  "1001-LR": "Lactated Ringers",
+  "1002-TU": "Tubing",
+  "1003-22": "22G ViaValve",
+  "1004-20": "20G Viavalve",
+  "1005-VA": "Vial adapter",
+  "1006-CC": "Curos Caps",
+  "1007-5M": "5ml Syringe",
+  "1008-NE": "20G Needle",
+  "1009-ZO": "Zofran",
+  "1010-TO": "Toradol",
+  "1011-PE": "Pepcid",
+  "1012-BE": "Benadryl",
+  "1013-PH": "Phenergan",
+  "1014-DE": "Dex",
+  "1015-CO": "Coban",
+  "1016-BC": "B-Complex",
+  "1017-B1": "B-12",
+  "1018-ZI": "Zinc",
+  "1019-MA": "Magnesium",
+  "1020-VC": "Vitamin C",
+  "1021-GL": "Glutathione",
+  "1022-TI": "Tri-immune",
+  "1023-NA": "NAD+",
+  "1024-KI": "Kits",
+  "1025-10": "10ml Syringe",
+  "1026-3M": "3ml Syringe",
+  "1027-22": "24ga Viavalve",
+  "1028-2X": "2x2",
+  "1029-AP": "Alcohol Preps",
+  "1030-TQ": "Tourniquet",
+  "1031-TE": "Tegaderm"
+};
+let bcMap = DEFAULT_BC;
+let webhook    = lsGet('sr_hook') || 'https://script.google.com/macros/s/AKfycby9XDExekGsVrjfoiK_yMr_7qOQW3zNTRfGFF-TIKvOfRaRtc2b-Tm2o2ntOm6ZUJRj/exec';
+
+function saveAll(){
+  lsSet('sr_locs', JSON.stringify(locations));
+  lsSet('sr_log',  JSON.stringify(localLog));
+  // Only save custom additions, defaults are always in code
+  const custom = {};
+  Object.entries(bcMap).forEach(([k,v]) => { if(!DEFAULT_BC[k]) custom[k]=v; });
+  lsSet('sr_bc', JSON.stringify(custom));
+}
+
+let activeLoc  = '';
+let session    = { tech:'', loc:'', items:[], zelle:'' };
+let curItem    = null;
+let curQty     = 1;
+let tabMode    = 'scan'; // 'scan' | 'pick'
+let scanner    = null;
+
+// ══════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════
+function nav(screen){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('s-' + screen).classList.add('active');
+  // stop camera when leaving scan
+  if(screen !== 'scan') stopCam();
+  // screen-specific init
+  if(screen === 'home')    renderLocList();
+  if(screen === 'tech')    renderTechGrid();
+  if(screen === 'scan')    initScan();
+  if(screen === 'summary') renderSummary();
+  if(screen === 'log')     renderLog('all');
+  if(screen === 'setup')   renderSetup();
+  updateHdr();
+}
+
+function goSettings(){
+  document.getElementById('pwInput').value = '';
+  document.getElementById('pwErr').style.display = 'none';
+  nav('password');
+}
+
+function checkPw(){
+  if(document.getElementById('pwInput').value === ADMIN_PW){
+    nav('setup');
+  } else {
+    document.getElementById('pwErr').style.display = 'block';
+    document.getElementById('pwInput').value = '';
+  }
+}
+
+// ══════════════════════════════════════════
+// HOME — LOCATION LIST
+// ══════════════════════════════════════════
+function renderLocList(){
+  const el = document.getElementById('locList');
+  el.innerHTML = '';
+  const locs = Object.keys(locations);
+  if(!locs.length){ el.innerHTML = '<div class="empty"><div class="empty-icon">📍</div>No locations — add in ⚙️</div>'; return; }
+  locs.forEach(loc => {
+    const n = (locations[loc]||[]).length;
+    const d = document.createElement('div');
+    d.className = 'loc-card';
+    d.innerHTML = `<div class="loc-icon">📍</div><div><div class="loc-name">${loc}</div><div class="loc-count">${n} tech${n!==1?'s':''}</div></div><div class="loc-arrow">›</div>`;
+    d.onclick = () => selectLoc(loc);
+    el.appendChild(d);
+  });
+}
+
+function selectLoc(loc){
+  activeLoc = loc;
+  document.getElementById('techLocLabel').textContent = loc;
+  nav('tech');
+}
+
+// ══════════════════════════════════════════
+// TECH GRID
+// ══════════════════════════════════════════
+function renderTechGrid(){
+  const g = document.getElementById('techGrid');
+  g.innerHTML = '';
+  const techs = locations[activeLoc] || [];
+  if(!techs.length){ g.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">👤</div>No techs — add in ⚙️</div>'; return; }
+  techs.forEach(name => {
+    const init = name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const btn = document.createElement('button');
+    btn.className = 'tech-card';
+    btn.innerHTML = `<div class="avatar">${init}</div><div class="tech-name">${name}</div>`;
+    btn.addEventListener('click', () => startSession(name));
+    g.appendChild(btn);
+  });
+}
+
+// ══════════════════════════════════════════
+// SESSION
+// ══════════════════════════════════════════
+function startSession(name){
+  session = { tech: name, loc: activeLoc, items: [], zelle: '' };
+  curItem = null; curQty = 1;
+  document.getElementById('scanLabel').textContent = name + ' · ' + activeLoc;
+  nav('scan');
+}
+
+function cancelSession(){
+  stopCam();
+  session = { tech:'', loc:'', items:[], zelle:'' };
+  nav('home');
+}
+
+// ══════════════════════════════════════════
+// SCAN SCREEN
+// ══════════════════════════════════════════
+function initScan(){
+  hideQtyCard();
+  renderMiniCart();
+  updateSteps();
+  switchTab('scan');
+}
+
+function switchTab(mode){
+  tabMode = mode;
+  document.getElementById('tabScan').classList.toggle('active', mode==='scan');
+  document.getElementById('tabPick').classList.toggle('active', mode==='pick');
+  document.getElementById('paneScan').style.display = mode==='scan' ? '' : 'none';
+  document.getElementById('panePick').style.display = mode==='pick' ? '' : 'none';
+  hideQtyCard();
+  if(mode==='scan') startCam();
+  else { stopCam(); renderPickList(); }
+}
+
+// ── Camera ──
+async function startCam(){
+  if(scanner) return;
+  try {
+    scanner = new Html5Qrcode('scanVideo');
+    await scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 220, height: 220 } },
+      (text) => onBarcode(text),
+      () => {}
+    );
+    setScanSt('🔍 Searching for barcode…','');
+  } catch(e){
+    scanner = null;
+    setScanSt('⚠️ Camera unavailable — use manual entry or pick from list','err');
+  }
+}
+
+function stopCam(){
+  if(scanner){
+    try { scanner.stop().then(()=>{ try{ scanner.clear(); }catch(e){} scanner=null; }); } catch(e){ scanner=null; }
+  }
+}
+
+function setScanSt(msg, cls){
+  const el = document.getElementById('scanStatus');
+  if(el){ el.textContent = msg; el.className = 'scan-status ' + (cls||''); }
+}
+
+// ── Barcode detected ──
+function onBarcode(bc){
+  if(curItem) return;
+  stopCam();
+  const name = bcMap[bc];
+  if(name){
+    setScanSt('✓ ' + name, 'ok');
+    setTimeout(() => showQty(name, bc), 300);
+  } else {
+    setScanSt('⚠️ Unknown barcode — pick from list','err');
+    window._pendingBc = bc;
+    document.getElementById('scannedBcDisplay').style.display = '';
+    document.getElementById('scannedBcVal').textContent = bc;
+    setTimeout(() => switchTab('pick'), 300);
+    toast('Barcode scanned — select matching item','warn');
+  }
+}
+
+// ── Manual entry ──
+function doManual(){
+  const val = document.getElementById('manualInput').value.trim();
+  if(!val) return;
+  if(bcMap[val]){ showQty(bcMap[val], val); document.getElementById('manualInput').value=''; return; }
+  const inv = getInv(session.loc);
+  const exact = inv.find(i => i.toLowerCase()===val.toLowerCase());
+  if(exact){ showQty(exact,'manual'); document.getElementById('manualInput').value=''; return; }
+  const partial = inv.find(i => i.toLowerCase().includes(val.toLowerCase()));
+  if(partial){ showQty(partial,'manual'); document.getElementById('manualInput').value=''; return; }
+  toast('Item not found — try picking from list','err');
+}
+
+// ── Pick list ──
+function renderPickList(){
+  const q = (document.getElementById('pickSearch')||{}).value||'';
+  const el = document.getElementById('pickList');
+  if(!el) return;
+  el.innerHTML = '';
+  getInv(session.loc)
+    .filter(i => !q || i.toLowerCase().includes(q.toLowerCase()))
+    .forEach(name => {
+      const sel = curItem && curItem.name===name;
+      const row = document.createElement('div');
+      row.className = 'pick-row' + (sel?' selected':'');
+      row.innerHTML = `<div class="pick-name">${name}</div><div class="pick-check">${sel?'✓':''}</div>`;
+      row.onclick = () => {
+        const bc = window._pendingBc || 'manual';
+        window._pendingBc = null;
+        showQty(name, bc);
+      };
+      el.appendChild(row);
+    });
+}
+
+// ── Show quantity card ──
+function showQty(name, bc){
+  curItem = { name, bc };
+  curQty  = 1;
+  stopCam();
+  document.getElementById('detName').textContent = name;
+  document.getElementById('detBc').textContent   = bc !== 'manual' ? 'Barcode: ' + bc : 'Manual / List';
+  document.getElementById('qtyNum').textContent  = 1;
+  document.getElementById('scanTabs').style.display = 'none';
+  document.getElementById('paneScan').style.display = 'none';
+  document.getElementById('panePick').style.display = 'none';
+  document.getElementById('qtyCard').style.display = '';
+  document.getElementById('qtyCard').scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function hideQtyCard(){
+  curItem = null; curQty = 1;
+  document.getElementById('qtyCard').style.display = 'none';
+  document.getElementById('scanTabs').style.display = '';
+  document.getElementById('paneScan').style.display = tabMode==='scan' ? '' : 'none';
+  document.getElementById('panePick').style.display = tabMode==='pick' ? '' : 'none';
+}
+
+function cancelItem(){ hideQtyCard(); if(tabMode==='scan') startCam(); }
+
+function adjQty(d){ curQty = Math.max(1, curQty+d); document.getElementById('qtyNum').textContent = curQty; }
+
+// ── Add to cart ──
+function commitItem(){
+  if(!curItem) return false;
+  const ex = session.items.find(i => i.name===curItem.name);
+  if(ex) ex.qty += curQty;
+  else   session.items.push({ name: curItem.name, bc: curItem.bc, qty: curQty });
+  hideQtyCard();
+  renderMiniCart();
+  updateSteps();
+  updateHdr();
+  return true;
+}
+
+function addNext(){
+  if(commitItem()){ toast('Added!'); switchTab('scan'); }
+}
+
+function addFinish(){
+  if(commitItem()){
+    if(session.loc === 'NYC'){ session.zelle=''; nav('summary'); }
+    else nav('zelle');
+  }
+}
+
+// ── Mini cart ──
+function renderMiniCart(){
+  const n = session.items.length;
+  document.getElementById('miniCartWrap').style.display = n ? '' : 'none';
+  document.getElementById('cartCount').textContent = n;
+  const mc = document.getElementById('miniCart');
+  mc.innerHTML = '';
+  session.items.forEach((it,i) => {
+    const d = document.createElement('div');
+    d.className = 'cart-item';
+    d.innerHTML = `<div class="ci-name">${it.name}</div><div class="ci-qty">×${it.qty}</div><button class="ci-del" onclick="removeFromCart(${i})">✕</button>`;
+    mc.appendChild(d);
+  });
+}
+
+function removeFromCart(i){ session.items.splice(i,1); renderMiniCart(); updateSteps(); updateHdr(); }
+
+function updateSteps(){
+  const el = document.getElementById('stepDots');
+  el.innerHTML = '';
+  session.items.forEach(() => { const d=document.createElement('div'); d.className='step-dot done'; el.appendChild(d); });
+  const cur=document.createElement('div'); cur.className='step-dot on'; el.appendChild(cur);
+}
+
+// ══════════════════════════════════════════
+// ZELLE
+// ══════════════════════════════════════════
+function setZelle(answer){
+  session.zelle = answer;
+  nav('summary');
+}
+
+// ══════════════════════════════════════════
+// SUMMARY
+// ══════════════════════════════════════════
+function renderSummary(){
+  document.getElementById('sumLabel').textContent = session.tech + ' · ' + session.loc;
+  document.getElementById('sumZelle').textContent = session.zelle || '—';
+  document.getElementById('sumZelleRow').style.display = session.loc==='NYC' ? 'none' : '';
+  const list = document.getElementById('sumList');
+  list.innerHTML = '';
+  session.items.forEach((it,i) => {
+    const d = document.createElement('div');
+    d.className = 'cart-item';
+    d.innerHTML = `<div class="ci-name">${it.name}</div><div class="ci-qty">×${it.qty}</div><button class="ci-del" onclick="removeFromSummary(${i})">✕</button>`;
+    list.appendChild(d);
+  });
+  document.getElementById('sumTotal').textContent = session.items.length + ' line' + (session.items.length!==1?'s':'');
+}
+
+function removeFromSummary(i){ session.items.splice(i,1); renderSummary(); }
+
+// ══════════════════════════════════════════
+// SUBMIT
+// ══════════════════════════════════════════
+async function submitSession(){
+  if(!session.items.length){ toast('No items to submit!','err'); return; }
+  const now = new Date();
+  const date = now.toLocaleDateString('en-US');
+  const time = now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+
+  const qtyMap = {};
+  getInv(session.loc).forEach(n => qtyMap[n]=0);
+  session.items.forEach(it => { if(qtyMap[it.name]!==undefined) qtyMap[it.name]+=it.qty; });
+
+  const payload = { date, time, tech: session.tech, location: session.loc, zelle: session.zelle||'', items: qtyMap, rawItems: session.items };
+
+  localLog.unshift({ ...payload, submittedAt: now.toISOString() });
+  saveAll();
+
+  if(webhook){
+    document.getElementById('overlay').classList.add('show');
+    try {
+      await fetch(webhook, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      document.getElementById('overlay').classList.remove('show');
+      toast('✓ Submitted to Google Sheets!');
+    } catch(e){
+      document.getElementById('overlay').classList.remove('show');
+      toast('Sheet error — saved locally','warn');
+    }
+  } else {
+    toast('Saved locally (no webhook set)','warn');
+  }
+
+  session = { tech:'', loc:'', items:[], zelle:'' };
+  nav('home');
+}
+
+// ══════════════════════════════════════════
+// LOG
+// ══════════════════════════════════════════
+function filterLog(f){
+  document.getElementById('tabAll').classList.toggle('active', f==='all');
+  document.getElementById('tabToday').classList.toggle('active', f==='today');
+  renderLog(f);
+}
+
+function renderLog(f){
+  const el = document.getElementById('logList');
+  let entries = localLog;
+  if(f==='today'){ const t=new Date().toLocaleDateString('en-US'); entries=entries.filter(e=>e.date===t); }
+  if(!entries.length){ el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>No entries yet</div>'; return; }
+  el.innerHTML='';
+  entries.forEach(e => {
+    const items = (e.rawItems||[]).map(i=>`${i.name} ×${i.qty}`).join(' · ');
+    const d = document.createElement('div');
+    d.className = 'log-entry';
+    d.innerHTML = `
+      <div class="log-hdr">
+        <div class="log-tech">${e.tech} <span style="color:var(--muted);font-weight:400;font-size:0.82rem">· ${e.location||'—'}</span></div>
+        <div class="log-time">${e.date}<br>${e.time||''}</div>
+      </div>
+      <div class="log-detail">${items||'—'}</div>
+      <div><span class="badge">${(e.rawItems||[]).length} item type${(e.rawItems||[]).length!==1?'s':''}</span>${e.zelle?`<span class="badge" style="margin-left:6px;background:rgba(77,139,255,.15);color:var(--accent2)">Zelle: ${e.zelle}</span>`:''}</div>`;
+    el.appendChild(d);
+  });
+}
+
+// ══════════════════════════════════════════
+// SETUP
+// ══════════════════════════════════════════
+function renderSetup(){
+  document.getElementById('webhookInput').value = webhook;
+  updateWebhookSt();
+
+  // Barcode map
+  const bml = document.getElementById('bcMapList');
+  bml.innerHTML = '';
+  const entries = Object.entries(bcMap);
+  if(!entries.length) bml.innerHTML='<div style="font-size:0.78rem;color:var(--muted)">No barcodes mapped yet.</div>';
+  entries.forEach(([bc,name]) => {
+    const r = document.createElement('div');
+    r.className = 'setup-row';
+    r.innerHTML = `<div><div class="setup-row-name">${name}</div><div style="font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--muted)">${bc}</div></div><button class="ci-del" onclick="removeBc('${bc}')">✕</button>`;
+    bml.appendChild(r);
+  });
+
+  // Item select
+  const sel = document.getElementById('newBcItem');
+  sel.innerHTML = BASE.concat(["Kits","10ml Syringe","3ml Syringe","24ga Viavalve","2x2","Alcohol Preps","Tourniquet","Tegaderm"]).map(i=>`<option value="${i}">${i}</option>`).join('');
+
+  // Locations + techs
+  const ltl = document.getElementById('locTechList');
+  ltl.innerHTML = '';
+  Object.entries(locations).forEach(([loc,techs]) => {
+    const sec = document.createElement('div');
+    sec.style.marginBottom = '14px';
+    const locKey = loc.replace(/\s/g,'_');
+    sec.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="font-weight:700;color:var(--accent)">📍 ${loc}</div>
+        <button class="ci-del" style="font-size:0.75rem;padding:3px 8px;border-radius:6px;border:1px solid rgba(255,82,99,.3);color:var(--danger);background:rgba(255,82,99,.08)" onclick="removeLoc('${loc}')">Remove</button>
+      </div>
+      <div id="tl_${locKey}" style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px"></div>
+      <div class="input-row">
+        <input type="text" id="nt_${locKey}" placeholder="Add tech to ${loc}…" style="font-size:0.82rem;padding:9px 12px" onkeydown="if(event.key==='Enter')addTech('${loc}')">
+        <button class="btn btn-ghost" style="width:auto;padding:9px 12px;font-size:0.82rem" onclick="addTech('${loc}')">Add</button>
+      </div>`;
+    ltl.appendChild(sec);
+    const tl = document.getElementById('tl_' + locKey);
+    (techs||[]).forEach((n,i) => {
+      const r = document.createElement('div');
+      r.className = 'setup-row';
+      r.innerHTML = `<div class="setup-row-name">${n}</div><button class="ci-del" onclick="removeTech('${loc}',${i})">✕</button>`;
+      tl.appendChild(r);
+    });
+  });
+}
+
+function saveWebhook(){ webhook = document.getElementById('webhookInput').value.trim(); lsSet('sr_hook', webhook); updateWebhookSt(); }
+function updateWebhookSt(){
+  const el = document.getElementById('webhookStatus');
+  if(webhook && webhook.includes('script.google.com')){ el.className='setup-status ok'; el.textContent='✓ Webhook configured'; }
+  else if(webhook){ el.className='setup-status'; el.textContent='⚠️ URL doesn\'t look right'; }
+  else { el.className='setup-status'; el.textContent='⚪ No webhook — saves locally only'; }
+}
+
+function addBcMap(){
+  const bc = document.getElementById('newBc').value.trim();
+  const name = document.getElementById('newBcItem').value;
+  if(!bc){ toast('Enter a barcode','err'); return; }
+  bcMap[bc]=name; saveAll(); renderSetup();
+  document.getElementById('newBc').value='';
+  toast('Barcode mapped!');
+}
+function removeBc(bc){ delete bcMap[bc]; saveAll(); renderSetup(); }
+
+function addTech(loc){
+  const key = loc.replace(/\s/g,'_');
+  const n = (document.getElementById('nt_'+key)||{}).value.trim();
+  if(!n){ toast('Enter a name','err'); return; }
+  if(!locations[loc]) locations[loc]=[];
+  if(locations[loc].includes(n)){ toast('Already in list','warn'); return; }
+  locations[loc].push(n); saveAll(); renderSetup();
+  toast(n+' added!');
+}
+function removeTech(loc,i){ locations[loc].splice(i,1); saveAll(); renderSetup(); }
+
+function addLoc(){
+  const n = document.getElementById('newLocInput').value.trim();
+  if(!n){ toast('Enter a name','err'); return; }
+  if(locations[n]){ toast('Already exists','warn'); return; }
+  locations[n]=[]; saveAll(); renderSetup();
+  document.getElementById('newLocInput').value='';
+  toast('Location added!');
+}
+function removeLoc(loc){
+  if(!confirm('Remove '+loc+' and all its techs?')) return;
+  delete locations[loc]; saveAll(); renderSetup();
+}
+
+// ══════════════════════════════════════════
+// HEADER
+// ══════════════════════════════════════════
+function updateHdr(){
+  const active = !!session.tech;
+  document.getElementById('hdrInfo').style.display = active ? '' : 'none';
+  if(active){
+    document.getElementById('hdrTech').textContent = session.tech;
+    const n = session.items.reduce((a,i)=>a+i.qty,0);
+    document.getElementById('hdrCount').textContent = n+' unit'+(n!==1?'s':'');
+  }
+}
+
+// ══════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════
+let toastT;
+function toast(msg, type=''){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (type?' '+type:'');
+  clearTimeout(toastT);
+  toastT = setTimeout(()=>el.classList.remove('show'), 2800);
+}
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+renderLocList();
+</script>
+</body>
+</html>
