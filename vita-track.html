@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0f1c3a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MIVD Vita-Track">
+<title>MIVD Vita-Track</title>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyBV-dRJ_5t18rOrxFtJTkDv_xGa-NRRkQc",
+    authDomain: "mivd-vitatrack.firebaseapp.com",
+    projectId: "mivd-vitatrack",
+    storageBucket: "mivd-vitatrack.firebasestorage.app",
+    messagingSenderId: "756909744199",
+    appId: "1:756909744199:web:ea627fb660baa7a74b1162"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db   = firebase.firestore();
+
+  // ── VITAMINS ──
+  const VITAMINS = ['B-Complex','B-12','Zinc','Magnesium','Vitamin C','Glutathione','Tri-immune','NAD+'];
+  const LOCATIONS = ['Phoenix','Las Vegas','Tucson','NYC'];
+  const ADMIN_EMAIL = 'jkreis2019@gmail.com';
+  const EXPIRY_DAYS = 40;
+
+  let currentUser = null;
+  let userProfile = null;
+
+  // ══════════════════════════════════════════════════
+  // AUTH
+  // ══════════════════════════════════════════════════
+  auth.onAuthStateChanged(async user => {
+    if(user){
+      currentUser = user;
+      try {
+        const snap = await db.collection('users').doc(user.uid).get();
+        if(snap.exists){
+          userProfile = snap.data();
+          showApp();
+        } else {
+          showToast('Account not set up. Contact admin.','err');
+          await auth.signOut();
+        }
+      } catch(e){
+        showToast('Error loading profile','err');
+        await auth.signOut();
+      }
+    } else {
+      currentUser = null;
+      userProfile = null;
+      showLogin();
+    }
+  });
+
+  function doLogin(){
+    const email = document.getElementById('loginEmail').value.trim();
+    const pass  = document.getElementById('loginPass').value;
+    const err   = document.getElementById('loginErr');
+    err.style.display = 'none';
+    if(!email || !pass){ err.textContent='Enter email and password'; err.style.display='block'; return; }
+    setLoading(true);
+    auth.signInWithEmailAndPassword(email, pass)
+      .then(() => setLoading(false))
+      .catch(e => {
+        setLoading(false);
+        err.textContent = 'Invalid email or password';
+        err.style.display = 'block';
+      });
+  }
+
+  function doLogout(){
+    auth.signOut();
+  }
+
+  function doResetPassword(){
+    const email = document.getElementById('loginEmail').value.trim();
+    if(!email){ showToast('Enter your email first','warn'); return; }
+    auth.sendPasswordResetEmail(email)
+      .then(() => showToast('Password reset email sent!'))
+      .catch(() => showToast('Error sending reset email','err'));
+  }
+
+  // ══════════════════════════════════════════════════
+  // SHOW APP
+  // ══════════════════════════════════════════════════
+  function showApp(){
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appShell').style.display = 'flex';
+    document.getElementById('userName').textContent = userProfile.name;
+    document.getElementById('userRole').textContent = userProfile.role === 'admin' ? '👑 Admin' : userProfile.role === 'lead' ? '⭐ Lead' : '👤 Tech';
+    const role = userProfile.role;
+    document.getElementById('navSubmit').style.display  = '';
+    document.getElementById('navPending').style.display = ['lead','admin'].includes(role) ? '' : 'none';
+    document.getElementById('nav-vials').style.display  = '';
+    document.getElementById('navAudit').style.display   = role === 'admin' ? '' : 'none';
+    document.getElementById('navAdmin').style.display   = role === 'admin' ? '' : 'none';
+    document.getElementById('nav-dashboard').style.display = role === 'admin' ? '' : 'none';
+    if(role === 'tech') showPane('submit');
+    else if(role === 'lead') showPane('pending');
+    else showPane('dashboard');
+  }
+
+  function showLogin(){
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('appShell').style.display = 'none';
+  }
+
+  // ══════════════════════════════════════════════════
+  // NAVIGATION
+  // ══════════════════════════════════════════════════
+  function showPane(pane){
+    document.querySelectorAll('.pane').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('pane-' + pane).style.display = 'flex';
+    const nb = document.getElementById('nav-' + pane);
+    if(nb) nb.classList.add('active');
+    if(pane === 'submit')    renderSubmitPane();
+    if(pane === 'pending')   renderPendingPane();
+    if(pane === 'vials')     renderVialsPane();
+    if(pane === 'audit')     renderAuditPane();
+    if(pane === 'dashboard') renderDashboard();
+    if(pane === 'admin')     renderAdminPane();
+  }
+
+  // ══════════════════════════════════════════════════
+  // SUBMIT VIAL
+  // ══════════════════════════════════════════════════
+  function renderSubmitPane(){
+    const sel = document.getElementById('vitaminSelect');
+    sel.innerHTML = '<option value="">Select vitamin…</option>' + VITAMINS.map(v=>`<option value="${v}">${v}</option>`).join('');
+    const today = new Date();
+    const expiry = new Date(today); expiry.setDate(expiry.getDate() + EXPIRY_DAYS);
+    document.getElementById('openedDate').textContent = fmtDate(today);
+    document.getElementById('expiryDate').textContent = fmtDate(expiry);
+  }
+
+  function submitVial(){
+    const vitamin = document.getElementById('vitaminSelect').value;
+    if(!vitamin){ showToast('Select a vitamin','err'); return; }
+    const today  = new Date();
+    const expiry = new Date(today); expiry.setDate(expiry.getDate() + EXPIRY_DAYS);
+    setLoading(true);
+    db.collection('vials').add({
+      techId:     currentUser.uid,
+      techName:   userProfile.name,
+      location:   userProfile.location,
+      vitamin,
+      openedDate: today.toISOString(),
+      expiryDate: expiry.toISOString(),
+      status:     'pending',
+      submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      auditLog: [{ action:'submitted', by: userProfile.name, role:'tech', at: new Date().toISOString(), note:'' }]
+    }).then(() => {
+      setLoading(false);
+      showToast('✓ Submitted! Waiting for lead approval.');
+      document.getElementById('vitaminSelect').value = '';
+    }).catch(() => { setLoading(false); showToast('Error submitting','err'); });
+  }
+
+  // ══════════════════════════════════════════════════
+  // PENDING APPROVALS
+  // ══════════════════════════════════════════════════
+  function renderPendingPane(){
+    const list = document.getElementById('pendingList');
+    list.innerHTML = '<div class="loading-text">Loading…</div>';
+    let q = db.collection('vials').where('status','==','pending');
+    if(userProfile.role === 'lead') q = q.where('location','==',userProfile.location);
+    q.orderBy('submittedAt','desc').get().then(snap => {
+      list.innerHTML = '';
+      if(snap.empty){ list.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div>No pending approvals</div>'; return; }
+      snap.forEach(d => {
+        const v = d.data();
+        const card = document.createElement('div');
+        card.className = 'vial-card pending';
+        card.innerHTML = `
+          <div class="vc-header">
+            <div><div class="vc-vitamin">${v.vitamin}</div><div class="vc-tech">👤 ${v.techName} · 📍 ${v.location}</div></div>
+            <div class="status-badge pending">Pending</div>
+          </div>
+          <div class="vc-dates">
+            <div class="vc-date-item"><span class="vc-label">Opened</span><span>${fmtDate(new Date(v.openedDate))}</span></div>
+            <div class="vc-date-item"><span class="vc-label">Expires</span><span>${fmtDate(new Date(v.expiryDate))}</span></div>
+          </div>
+          <div class="vc-actions">
+            <button class="btn btn-approve" onclick="approveVial('${d.id}')">✓ Approve</button>
+            <button class="btn btn-reject"  onclick="rejectVial('${d.id}')">✕ Reject</button>
+          </div>`;
+        list.appendChild(card);
+      });
+    });
+  }
+
+  function approveVial(id){
+    setLoading(true);
+    db.collection('vials').doc(id).get().then(snap => {
+      const log = snap.data().auditLog || [];
+      log.push({ action:'approved', by: userProfile.name, role: userProfile.role, at: new Date().toISOString(), note:'' });
+      return db.collection('vials').doc(id).update({ status:'approved', approvedBy: userProfile.name, approvedAt: firebase.firestore.FieldValue.serverTimestamp(), auditLog: log });
+    }).then(() => { setLoading(false); showToast('✓ Vial approved!'); renderPendingPane(); })
+      .catch(() => { setLoading(false); showToast('Error','err'); });
+  }
+
+  function rejectVial(id){
+    const note = prompt('Reason for rejection (optional):') || '';
+    setLoading(true);
+    db.collection('vials').doc(id).get().then(snap => {
+      const log = snap.data().auditLog || [];
+      log.push({ action:'rejected', by: userProfile.name, role: userProfile.role, at: new Date().toISOString(), note });
+      return db.collection('vials').doc(id).update({ status:'rejected', rejectedBy: userProfile.name, auditLog: log });
+    }).then(() => { setLoading(false); showToast('Vial rejected'); renderPendingPane(); })
+      .catch(() => { setLoading(false); showToast('Error','err'); });
+  }
+
+  // ══════════════════════════════════════════════════
+  // VIALS
+  // ══════════════════════════════════════════════════
+  function renderVialsPane(){
+    const list = document.getElementById('vialsList');
+    list.innerHTML = '<div class="loading-text">Loading…</div>';
+    let q = db.collection('vials');
+    if(userProfile.role === 'tech') q = q.where('techId','==',currentUser.uid);
+    else if(userProfile.role === 'lead') q = q.where('location','==',userProfile.location).where('status','==','approved');
+    else q = q.where('status','==','approved');
+    q.get().then(snap => {
+      list.innerHTML = '';
+      if(snap.empty){ list.innerHTML = '<div class="empty-state"><div class="empty-icon">💊</div>No vials found</div>'; return; }
+      snap.forEach(d => {
+        const v = d.data();
+        const urgency = getUrgency(new Date(v.expiryDate));
+        const card = document.createElement('div');
+        card.className = `vial-card ${urgency.cls}`;
+        card.innerHTML = `
+          <div class="vc-header">
+            <div><div class="vc-vitamin">${v.vitamin}</div><div class="vc-tech">👤 ${v.techName} · 📍 ${v.location}</div></div>
+            <div class="status-badge ${urgency.cls}">${urgency.label}</div>
+          </div>
+          <div class="vc-dates">
+            <div class="vc-date-item"><span class="vc-label">Opened</span><span>${fmtDate(new Date(v.openedDate))}</span></div>
+            <div class="vc-date-item"><span class="vc-label">Expires</span><span class="${urgency.textCls}">${fmtDate(new Date(v.expiryDate))}</span></div>
+            <div class="vc-date-item"><span class="vc-label">Days left</span><span class="${urgency.textCls}">${urgency.days}</span></div>
+          </div>
+          ${v.status==='pending'?'<div class="vc-pending-note">⏳ Awaiting lead approval</div>':''}
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${userProfile.role!=='tech'?`<button class="btn btn-audit" onclick="showAuditFor('${d.id}','${v.vitamin}','${v.techName}')">📋 Audit Log</button>`:''}
+            ${(userProfile.role==='lead'||userProfile.role==='admin')&&v.status==='approved'?`<button class="btn btn-update" onclick="updateExpiry('${d.id}')">📅 Update Expiry</button>`:''}
+          </div>`;
+        list.appendChild(card);
+      });
+    });
+  }
+
+  function updateExpiry(id){
+    const newDate = prompt('Enter new expiry date (MM/DD/YYYY):');
+    if(!newDate) return;
+    const parsed = new Date(newDate);
+    if(isNaN(parsed)){ showToast('Invalid date','err'); return; }
+    setLoading(true);
+    db.collection('vials').doc(id).get().then(snap => {
+      const data = snap.data();
+      const log = data.auditLog || [];
+      log.push({ action:'expiry_updated', by: userProfile.name, role: userProfile.role, at: new Date().toISOString(), note: `Changed from ${fmtDate(new Date(data.expiryDate))} to ${fmtDate(parsed)}` });
+      return db.collection('vials').doc(id).update({ expiryDate: parsed.toISOString(), auditLog: log });
+    }).then(() => { setLoading(false); showToast('✓ Expiry updated'); renderVialsPane(); })
+      .catch(() => { setLoading(false); showToast('Error','err'); });
+  }
+
+  function showAuditFor(id, vitamin, tech){
+    db.collection('vials').doc(id).get().then(snap => {
+      const log = snap.data().auditLog || [];
+      document.getElementById('auditModalTitle').textContent = `${vitamin} — ${tech}`;
+      document.getElementById('auditModalList').innerHTML = log.map(e=>`
+        <div class="audit-row">
+          <div class="audit-action ${e.action}">${fmtAction(e.action)}</div>
+          <div class="audit-by">${e.by} <span class="audit-role">(${e.role})</span></div>
+          <div class="audit-at">${fmtDate(new Date(e.at))}</div>
+          ${e.note?`<div class="audit-note">"${e.note}"</div>`:''}
+        </div>`).join('');
+      document.getElementById('auditModal').style.display = 'flex';
+    });
+  }
+
+  function closeAuditModal(){ document.getElementById('auditModal').style.display = 'none'; }
+
+  // ══════════════════════════════════════════════════
+  // DASHBOARD
+  // ══════════════════════════════════════════════════
+  function renderDashboard(){
+    db.collection('vials').where('status','==','approved').get().then(snap => {
+      let safe=0,warn=0,urgent=0,critical=0,expired=0;
+      snap.forEach(d => {
+        const u = getUrgency(new Date(d.data().expiryDate));
+        if(u.cls==='safe') safe++;
+        else if(u.cls==='warn') warn++;
+        else if(u.cls==='urgent') urgent++;
+        else if(u.cls==='critical') critical++;
+        else expired++;
+      });
+      document.getElementById('dashSafe').textContent     = safe;
+      document.getElementById('dashWarn').textContent     = warn;
+      document.getElementById('dashUrgent').textContent   = urgent;
+      document.getElementById('dashCritical').textContent = critical;
+      document.getElementById('dashExpired').textContent  = expired;
+    });
+    db.collection('vials').where('status','==','pending').get().then(snap => {
+      document.getElementById('dashPending').textContent = snap.size;
+    });
+  }
+
+  // ══════════════════════════════════════════════════
+  // AUDIT LOG
+  // ══════════════════════════════════════════════════
+  function renderAuditPane(){
+    const list = document.getElementById('auditList');
+    list.innerHTML = '<div class="loading-text">Loading…</div>';
+    db.collection('vials').orderBy('submittedAt','desc').get().then(snap => {
+      list.innerHTML = '';
+      snap.forEach(d => {
+        const v = d.data();
+        const log = v.auditLog || [];
+        const card = document.createElement('div');
+        card.className = 'audit-card';
+        card.innerHTML = `
+          <div class="audit-card-header">
+            <div><span class="vc-vitamin">${v.vitamin}</span> <span class="vc-tech">· ${v.techName} · ${v.location}</span></div>
+            <div class="status-badge ${v.status}">${v.status}</div>
+          </div>
+          <div class="audit-log-list">
+            ${log.map(e=>`
+              <div class="audit-row">
+                <div class="audit-action ${e.action}">${fmtAction(e.action)}</div>
+                <div class="audit-by">${e.by} <span class="audit-role">(${e.role})</span></div>
+                <div class="audit-at">${fmtDate(new Date(e.at))}</div>
+                ${e.note?`<div class="audit-note">"${e.note}"</div>`:''}
+              </div>`).join('')}
+          </div>`;
+        list.appendChild(card);
+      });
+    });
+  }
+
+  // ══════════════════════════════════════════════════
+  // ADMIN — MANAGE USERS
+  // ══════════════════════════════════════════════════
+  function renderAdminPane(){
+    db.collection('users').get().then(snap => {
+      const list = document.getElementById('userList');
+      list.innerHTML = '';
+      snap.forEach(d => {
+        const u = d.data();
+        const row = document.createElement('div');
+        row.className = 'user-row';
+        row.innerHTML = `
+          <div class="user-info">
+            <div class="user-name">${u.name}</div>
+            <div class="user-meta">${u.email} · ${u.role} · ${u.location||'All'}</div>
+          </div>
+          <button class="btn btn-small btn-reject" onclick="removeUser('${d.id}','${u.name}')">Remove</button>`;
+        list.appendChild(row);
+      });
+    });
+  }
+
+  function addUser(){
+    const name     = document.getElementById('newUserName').value.trim();
+    const email    = document.getElementById('newUserEmail').value.trim();
+    const role     = document.getElementById('newUserRole').value;
+    const location = document.getElementById('newUserLoc').value;
+    if(!name||!email){ showToast('Fill in all fields','err'); return; }
+    setLoading(true);
+    // Use email as doc ID (sanitized)
+    const uid = email.replace(/[^a-z0-9]/gi,'_').toLowerCase();
+    db.collection('users').doc(uid).set({ name, email, role, location, createdAt: new Date().toISOString() })
+      .then(() => auth.sendPasswordResetEmail(email))
+      .then(() => {
+        setLoading(false);
+        showToast('✓ User added! Setup email sent.');
+        document.getElementById('newUserName').value='';
+        document.getElementById('newUserEmail').value='';
+        renderAdminPane();
+      }).catch(e => { setLoading(false); showToast('Error: '+e.message,'err'); });
+  }
+
+  function removeUser(id, name){
+    if(!confirm(`Remove ${name}?`)) return;
+    db.collection('users').doc(id).delete().then(() => { showToast(`${name} removed`); renderAdminPane(); });
+  }
+
+  // ══════════════════════════════════════════════════
+  // HELPERS
+  // ══════════════════════════════════════════════════
+  function fmtDate(d){ return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+
+  function getUrgency(expiryDate){
+    const days = Math.ceil((expiryDate - new Date()) / (1000*60*60*24));
+    if(days < 0)   return { cls:'expired',  label:'Expired',     textCls:'text-expired',  days:'Expired' };
+    if(days <= 1)  return { cls:'critical', label:'🚨 Critical', textCls:'text-critical', days:days+'d' };
+    if(days <= 5)  return { cls:'urgent',   label:'⚠️ Urgent',   textCls:'text-urgent',   days:days+'d' };
+    if(days <= 10) return { cls:'warn',     label:'📢 Warning',  textCls:'text-warn',     days:days+'d' };
+    return               { cls:'safe',     label:'✓ Active',    textCls:'text-safe',     days:days+'d' };
+  }
+
+  function fmtAction(a){
+    const map = { submitted:'📤 Submitted', approved:'✅ Approved', rejected:'❌ Rejected', expiry_updated:'📅 Expiry Updated' };
+    return map[a]||a;
+  }
+
+  function setLoading(on){ document.getElementById('loadingOverlay').style.display = on?'flex':'none'; }
+
+  let toastTimer;
+  function showToast(msg, type=''){
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast show'+(type?' '+type:'');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>el.classList.remove('show'),3000);
+  }
+</script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  --navy: #0f1c3a;
+  --navy2: #162448;
+  --navy3: #1e2f5a;
+  --gold: #c9a84c;
+  --gold-light: #e8c96d;
+  --gold-dim: rgba(201,168,76,0.15);
+  --gold-border: rgba(201,168,76,0.3);
+  --text: #f0f2f8;
+  --text-muted: #7a8ab0;
+  --border: rgba(255,255,255,0.08);
+  --safe: #00d68f;
+  --warn-c: #f0b429;
+  --urgent-c: #ff8c00;
+  --critical-c: #ff4757;
+  --expired-c: #6b7399;
+  --r: 14px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: 'Syne', sans-serif;
+  background: var(--navy);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── LOGIN ── */
+#loginScreen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  width: 100%;
+  padding: 40px 24px;
+  background: linear-gradient(160deg, #0a1228 0%, #162448 50%, #0f1c3a 100%);
+}
+
+.login-logo {
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+.logo-circle {
+  width: 80px; height: 80px;
+  border: 2.5px solid var(--gold);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 12px;
+  font-size: 2rem;
+  color: var(--gold);
+}
+
+.logo-text { font-size: 1.5rem; font-weight: 800; color: var(--text); }
+.logo-text span { color: var(--gold); }
+.logo-sub { font-size: 0.75rem; letter-spacing: 3px; text-transform: uppercase; color: var(--text-muted); margin-top: 4px; }
+
+.login-card {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--gold-border);
+  border-radius: 20px;
+  padding: 32px 24px;
+  width: 100%; max-width: 380px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+.login-title { font-size: 1.3rem; font-weight: 700; text-align: center; margin-bottom: 4px; }
+
+input[type=email], input[type=password], input[type=text], select {
+  background: rgba(255,255,255,0.07);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 13px 16px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.9rem;
+  color: var(--text);
+  width: 100%;
+  transition: border-color .15s;
+}
+input:focus, select:focus { outline: none; border-color: var(--gold); }
+select option { background: var(--navy2); }
+
+.login-err { color: var(--critical-c); font-size: 0.82rem; text-align: center; display: none; }
+.forgot-link { font-size: 0.78rem; color: var(--gold); text-align: center; cursor: pointer; }
+
+/* ── BUTTONS ── */
+.btn {
+  border: none; border-radius: 10px; padding: 13px 18px;
+  font-family: 'Syne', sans-serif; font-size: 0.9rem; font-weight: 700;
+  cursor: pointer; transition: all .15s;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%;
+}
+.btn-gold { background: linear-gradient(135deg, var(--gold), var(--gold-light)); color: var(--navy); }
+.btn-gold:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.btn-ghost { background: rgba(255,255,255,0.06); color: var(--text); border: 1.5px solid var(--border); }
+.btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
+.btn-approve { background: rgba(0,214,143,0.12); color: var(--safe); border: 1.5px solid rgba(0,214,143,0.3); flex: 1; }
+.btn-approve:hover { background: rgba(0,214,143,0.2); }
+.btn-reject  { background: rgba(255,71,87,0.12); color: var(--critical-c); border: 1.5px solid rgba(255,71,87,0.3); flex: 1; }
+.btn-reject:hover  { background: rgba(255,71,87,0.2); }
+.btn-audit  { background: rgba(201,168,76,0.1); color: var(--gold); border: 1.5px solid var(--gold-border); font-size: 0.82rem; padding: 8px 14px; width: auto; }
+.btn-update { background: rgba(77,139,255,0.1); color: #4d8bff; border: 1.5px solid rgba(77,139,255,0.3); font-size: 0.82rem; padding: 8px 14px; width: auto; margin-left: 8px; }
+.btn-small  { padding: 7px 14px; width: auto; font-size: 0.8rem; }
+.btn-row { display: flex; gap: 8px; }
+
+/* ── APP SHELL ── */
+#appShell {
+  display: none;
+  flex-direction: column;
+  width: 100%; max-width: 520px;
+  min-height: 100vh;
+}
+
+/* ── HEADER ── */
+.app-header {
+  background: rgba(10,18,40,0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--gold-border);
+  padding: 14px 18px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 90;
+  width: 100%;
+}
+
+.hdr-logo { display: flex; align-items: center; gap: 10px; }
+.hdr-logo-circle {
+  width: 34px; height: 34px; border: 1.5px solid var(--gold);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  color: var(--gold); font-size: 0.85rem; font-weight: 800;
+}
+.hdr-logo-text { font-size: 0.9rem; font-weight: 800; }
+.hdr-logo-text span { color: var(--gold); }
+
+.hdr-user { text-align: right; }
+.hdr-name { font-size: 0.82rem; font-weight: 700; }
+.hdr-role { font-size: 0.68rem; color: var(--gold); font-family: 'DM Mono', monospace; }
+
+.logout-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; transition: all .15s; }
+.logout-btn:hover { color: var(--critical-c); }
+
+/* ── CONTENT ── */
+.app-content { flex: 1; overflow-y: auto; padding: 20px 18px 100px; display: flex; flex-direction: column; gap: 16px; }
+
+.pane { display: none; flex-direction: column; gap: 16px; }
+
+.pane-title { font-size: 1.3rem; font-weight: 800; }
+.eyebrow { font-size: 0.63rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+
+/* ── CARDS ── */
+.card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 18px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+.gold-card {
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  border-radius: var(--r);
+  padding: 18px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+/* ── SUBMIT PANE ── */
+.date-display {
+  display: flex; gap: 10px;
+}
+.date-item {
+  flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px;
+}
+.date-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+.date-value { font-family: 'DM Mono', monospace; font-size: 0.9rem; font-weight: 500; }
+.date-value.expiry { color: var(--gold); }
+.locked-note { font-size: 0.72rem; color: var(--text-muted); text-align: center; }
+
+/* ── VIAL CARDS ── */
+.vial-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.vial-card.warn     { border-color: rgba(240,180,41,0.4); background: rgba(240,180,41,0.05); }
+.vial-card.urgent   { border-color: rgba(255,140,0,0.4);  background: rgba(255,140,0,0.05); }
+.vial-card.critical { border-color: rgba(255,71,87,0.4);  background: rgba(255,71,87,0.05); }
+.vial-card.expired  { border-color: rgba(107,115,153,0.4); opacity: 0.7; }
+.vial-card.pending  { border-color: var(--gold-border); background: var(--gold-dim); }
+
+.vc-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.vc-vitamin { font-size: 1.05rem; font-weight: 800; }
+.vc-tech { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+.vc-dates { display: flex; gap: 8px; flex-wrap: wrap; }
+.vc-date-item { display: flex; flex-direction: column; gap: 2px; min-width: 80px; }
+.vc-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); }
+.vc-actions { display: flex; gap: 8px; }
+.vc-pending-note { font-size: 0.78rem; color: var(--gold); font-family: 'DM Mono', monospace; }
+
+.text-safe     { color: var(--safe); font-weight: 700; }
+.text-warn     { color: var(--warn-c); font-weight: 700; }
+.text-urgent   { color: var(--urgent-c); font-weight: 700; }
+.text-critical { color: var(--critical-c); font-weight: 700; }
+.text-expired  { color: var(--expired-c); font-weight: 700; }
+
+/* ── STATUS BADGES ── */
+.status-badge {
+  font-family: 'DM Mono', monospace; font-size: 0.68rem; font-weight: 500;
+  padding: 4px 10px; border-radius: 20px; white-space: nowrap; flex-shrink: 0;
+}
+.status-badge.safe     { background: rgba(0,214,143,0.15); color: var(--safe); }
+.status-badge.warn     { background: rgba(240,180,41,0.15); color: var(--warn-c); }
+.status-badge.urgent   { background: rgba(255,140,0,0.15); color: var(--urgent-c); }
+.status-badge.critical { background: rgba(255,71,87,0.15); color: var(--critical-c); }
+.status-badge.expired  { background: rgba(107,115,153,0.15); color: var(--expired-c); }
+.status-badge.pending  { background: var(--gold-dim); color: var(--gold); }
+.status-badge.approved { background: rgba(0,214,143,0.15); color: var(--safe); }
+.status-badge.rejected { background: rgba(255,71,87,0.15); color: var(--critical-c); }
+
+/* ── DASHBOARD ── */
+.dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dash-card {
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 16px; text-align: center;
+}
+.dash-card.warn     { border-color: rgba(240,180,41,0.3); }
+.dash-card.urgent   { border-color: rgba(255,140,0,0.3); }
+.dash-card.critical { border-color: rgba(255,71,87,0.3); }
+.dash-card.gold     { border-color: var(--gold-border); }
+.dash-num { font-size: 2.5rem; font-weight: 800; line-height: 1; }
+.dash-num.safe     { color: var(--safe); }
+.dash-num.warn     { color: var(--warn-c); }
+.dash-num.urgent   { color: var(--urgent-c); }
+.dash-num.critical { color: var(--critical-c); }
+.dash-num.gold     { color: var(--gold); }
+.dash-label { font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+
+/* ── AUDIT ── */
+.audit-card { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.audit-card-header { display: flex; justify-content: space-between; align-items: center; }
+.audit-log-list { display: flex; flex-direction: column; gap: 6px; }
+.audit-row { background: rgba(255,255,255,0.03); border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.audit-action { font-weight: 700; font-size: 0.82rem; }
+.audit-action.submitted      { color: var(--gold); }
+.audit-action.approved       { color: var(--safe); }
+.audit-action.rejected       { color: var(--critical-c); }
+.audit-action.expiry_updated { color: #4d8bff; }
+.audit-by   { font-size: 0.78rem; }
+.audit-role { color: var(--text-muted); }
+.audit-at   { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--text-muted); }
+.audit-note { font-size: 0.75rem; color: var(--text-muted); font-style: italic; }
+
+/* ── ADMIN USER LIST ── */
+.user-row { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; gap: 10px; }
+.user-name { font-weight: 700; font-size: 0.9rem; }
+.user-meta { font-size: 0.72rem; color: var(--text-muted); font-family: 'DM Mono', monospace; margin-top: 2px; }
+
+/* ── BOTTOM NAV ── */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 520px;
+  background: rgba(10,18,40,0.97);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--gold-border);
+  display: flex; padding: 8px 0 20px;
+  z-index: 90;
+}
+.nav-btn {
+  flex: 1; background: none; border: none; color: var(--text-muted);
+  font-family: 'Syne', sans-serif; font-size: 0.62rem; font-weight: 600;
+  cursor: pointer; padding: 8px 4px; display: flex; flex-direction: column;
+  align-items: center; gap: 4px; transition: all .15s;
+}
+.nav-btn .nav-icon { font-size: 1.2rem; }
+.nav-btn:hover { color: var(--gold); }
+.nav-btn.active { color: var(--gold); }
+
+/* ── MODAL ── */
+.modal {
+  display: none; position: fixed; inset: 0;
+  background: rgba(5,10,25,0.9); z-index: 200;
+  align-items: flex-end; justify-content: center;
+}
+.modal-content {
+  background: var(--navy2); border: 1px solid var(--gold-border);
+  border-radius: 20px 20px 0 0; padding: 24px 20px 40px;
+  width: 100%; max-width: 520px; max-height: 80vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.modal-title { font-size: 1.1rem; font-weight: 700; }
+.modal-close { position: absolute; top: 16px; right: 20px; background: none; border: none; color: var(--text-muted); font-size: 1.3rem; cursor: pointer; }
+
+/* ── LOADING ── */
+#loadingOverlay { position: fixed; inset: 0; background: rgba(5,10,25,0.8); display: none; align-items: center; justify-content: center; z-index: 300; flex-direction: column; gap: 14px; }
+.spinner { width: 44px; height: 44px; border: 3px solid var(--border); border-top-color: var(--gold); border-radius: 50%; animation: spin .75s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── TOAST ── */
+.toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--navy2); border: 1px solid var(--gold-border); color: var(--gold); padding: 11px 22px; border-radius: 40px; font-weight: 700; font-size: 0.88rem; z-index: 400; transition: transform .3s cubic-bezier(.34,1.56,.64,1); white-space: nowrap; pointer-events: none; }
+.toast.show { transform: translateX(-50%) translateY(0); }
+.toast.err  { border-color: rgba(255,71,87,.5); color: var(--critical-c); }
+.toast.warn { border-color: rgba(240,180,41,.5); color: var(--warn-c); }
+
+.empty-state { text-align: center; padding: 48px 20px; color: var(--text-muted); }
+.empty-icon  { font-size: 2.5rem; margin-bottom: 12px; }
+.loading-text { text-align: center; color: var(--text-muted); padding: 32px; font-family: 'DM Mono', monospace; font-size: 0.85rem; }
+
+::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: var(--gold-border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════════ -->
+<div id="loginScreen">
+  <div class="login-logo">
+    <div class="logo-circle">ⓂV</div>
+    <div class="logo-text">MIVD <span>Vita-Track</span></div>
+    <div class="logo-sub">Vitamin Expiration Management</div>
+  </div>
+  <div class="login-card">
+    <div class="login-title">Sign In</div>
+    <input type="email" id="loginEmail" placeholder="Email address…" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
+    <input type="password" id="loginPass" placeholder="Password…" onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="login-err" id="loginErr"></div>
+    <button class="btn btn-gold" onclick="doLogin()">Sign In →</button>
+    <div class="forgot-link" onclick="doResetPassword()">Forgot password?</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     APP SHELL
+══════════════════════════════════════ -->
+<div id="appShell" style="display:none;flex-direction:column;width:100%;max-width:520px;min-height:100vh">
+
+  <!-- Header -->
+  <div class="app-header">
+    <div class="hdr-logo">
+      <div class="hdr-logo-circle">ⓂV</div>
+      <div class="hdr-logo-text">MIVD <span>Vita-Track</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="hdr-user">
+        <div class="hdr-name" id="userName">—</div>
+        <div class="hdr-role" id="userRole">—</div>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">Sign out</button>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="app-content">
+
+    <!-- DASHBOARD (admin) -->
+    <div class="pane" id="pane-dashboard">
+      <div><div class="eyebrow">Admin Overview</div><div class="pane-title">Dashboard</div></div>
+      <div class="dash-grid">
+        <div class="dash-card gold"><div class="dash-num gold" id="dashPending">—</div><div class="dash-label">Pending</div></div>
+        <div class="dash-card"><div class="dash-num safe" id="dashSafe">—</div><div class="dash-label">Active</div></div>
+        <div class="dash-card warn"><div class="dash-num warn" id="dashWarn">—</div><div class="dash-label">⚠️ 10 days</div></div>
+        <div class="dash-card urgent"><div class="dash-num urgent" id="dashUrgent">—</div><div class="dash-label">🔶 5 days</div></div>
+        <div class="dash-card critical"><div class="dash-num critical" id="dashCritical">—</div><div class="dash-label">🚨 1 day</div></div>
+        <div class="dash-card"><div class="dash-num text-expired" id="dashExpired">—</div><div class="dash-label">Expired</div></div>
+      </div>
+      <button class="btn btn-ghost" onclick="showPane('vials')">View All Vials →</button>
+      <button class="btn btn-ghost" onclick="showPane('pending')">View Pending Approvals →</button>
+    </div>
+
+    <!-- SUBMIT VIAL (tech) -->
+    <div class="pane" id="pane-submit">
+      <div><div class="eyebrow">New Entry</div><div class="pane-title">Open a Vial</div></div>
+      <div class="gold-card">
+        <div class="eyebrow">Select Vitamin</div>
+        <select id="vitaminSelect"><option value="">Select vitamin…</option></select>
+        <div class="date-display">
+          <div class="date-item">
+            <div class="date-label">Date Opened</div>
+            <div class="date-value" id="openedDate">—</div>
+          </div>
+          <div class="date-item">
+            <div class="date-label">Expires (40 days)</div>
+            <div class="date-value expiry" id="expiryDate">—</div>
+          </div>
+        </div>
+        <div class="locked-note">🔒 Dates are automatically calculated and cannot be changed</div>
+      </div>
+      <button class="btn btn-gold" onclick="submitVial()">Submit for Approval →</button>
+    </div>
+
+    <!-- PENDING APPROVALS (lead/admin) -->
+    <div class="pane" id="pane-pending">
+      <div><div class="eyebrow">Action Required</div><div class="pane-title">Pending Approvals</div></div>
+      <div id="pendingList"></div>
+    </div>
+
+    <!-- MY VIALS / ALL VIALS -->
+    <div class="pane" id="pane-vials">
+      <div><div class="eyebrow">Tracking</div><div class="pane-title">Active Vials</div></div>
+      <select id="vialsFilter" style="display:none" onchange="filterVials()"></select>
+      <div id="vialsList"></div>
+    </div>
+
+    <!-- AUDIT LOG (admin) -->
+    <div class="pane" id="pane-audit">
+      <div><div class="eyebrow">Full History</div><div class="pane-title">Audit Log</div></div>
+      <div id="auditList"></div>
+    </div>
+
+    <!-- ADMIN PANEL -->
+    <div class="pane" id="pane-admin">
+      <div><div class="eyebrow">Admin</div><div class="pane-title">Manage Users</div></div>
+      <div class="gold-card">
+        <div class="eyebrow">Add New User</div>
+        <input type="text"  id="newUserName"  placeholder="Full name…">
+        <input type="text"  id="newUserEmail" placeholder="Email address…">
+        <select id="newUserRole">
+          <option value="tech">Tech</option>
+          <option value="lead">Lead</option>
+          <option value="admin">Admin</option>
+        </select>
+        <select id="newUserLoc">
+          <option value="Phoenix">Phoenix</option>
+          <option value="Las Vegas">Las Vegas</option>
+          <option value="Tucson">Tucson</option>
+          <option value="NYC">NYC</option>
+          <option value="">All Locations (Admin)</option>
+        </select>
+        <button class="btn btn-gold" onclick="addUser()">Add User & Send Invite →</button>
+      </div>
+      <div class="eyebrow" style="margin-top:4px">Current Users</div>
+      <div id="userList" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
+  </div>
+
+  <!-- Bottom Nav -->
+  <div class="bottom-nav">
+    <button class="nav-btn" id="nav-dashboard" onclick="showPane('dashboard')" style="display:none">
+      <span class="nav-icon">📊</span>Dashboard
+    </button>
+    <button class="nav-btn" id="navSubmit" onclick="showPane('submit')">
+      <span class="nav-icon">💉</span>Open Vial
+    </button>
+    <button class="nav-btn" id="nav-vials" onclick="showPane('vials')">
+      <span class="nav-icon">💊</span>My Vials
+    </button>
+    <button class="nav-btn" id="navPending" onclick="showPane('pending')" style="display:none">
+      <span class="nav-icon">✅</span>Approvals
+    </button>
+    <button class="nav-btn" id="navAudit" onclick="showPane('audit')" style="display:none">
+      <span class="nav-icon">📋</span>Audit Log
+    </button>
+    <button class="nav-btn" id="navAdmin" onclick="showPane('admin')" style="display:none">
+      <span class="nav-icon">👥</span>Users
+    </button>
+  </div>
+</div>
+
+<!-- Audit Modal -->
+<div class="modal" id="auditModal">
+  <div class="modal-content" style="position:relative">
+    <button class="modal-close" onclick="closeAuditModal()">✕</button>
+    <div class="modal-title" id="auditModalTitle">Audit Log</div>
+    <div id="auditModalList" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
+</div>
+
+<!-- Loading -->
+<div id="loadingOverlay">
+  <div class="spinner"></div>
+  <div style="color:var(--gold);font-size:0.88rem;font-family:'DM Mono',monospace">Processing…</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+</body>
+</html>
